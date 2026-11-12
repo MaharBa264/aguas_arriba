@@ -33,6 +33,9 @@ label select, label input[type=range] { display: block; width: 100% }
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px }
 .stage { position: sticky; top: 6px; align-self: start; background: #163e39; color: white; border-radius: 16px; overflow: hidden }
 .stamp { position: absolute; z-index: 1; pointer-events: none; top: 14px; left: 16px; font: 600 11px monospace; letter-spacing: .1em; color: #1e4d4c; background: #fbf7e9df; border-radius: 3px; padding: 6px 9px }
+/* Screen-printed grain is a fixed tile shared by both scene renderers. */
+.scene-art { position: relative; isolation: isolate }
+.scene-art::after { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: url("paper.png") repeat; background-size: 144px 144px }
 /* pan-y: a vertical swipe scrolls the page, a horizontal drag turns the camera. */
 canvas { width: 100%; height: clamp(310px, 52vh, 600px); display: block; touch-action: pan-y; cursor: grab }
 .tools { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 6px 14px; background: #24534d }
@@ -75,7 +78,7 @@ legend { font: italic 23px Georgia; padding-right: 8px }
   <div class="grid">
     <section class="stage" aria-label="Escena del lance">
       <div class="stamp">Cuaderno de campo · Lance básico</div>
-      <canvas role="img" aria-label="Vista tridimensional del pescador, el río y la línea"></canvas>
+      <div class="scene-art"><canvas role="img" aria-label="Vista tridimensional del pescador, el río y la línea"></canvas></div>
       <div class="tools">
         <select id="view" aria-label="Vista de cámara">
           <option value="oblique">Tres cuartos</option>

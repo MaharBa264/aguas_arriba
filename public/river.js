@@ -14,13 +14,20 @@
   // ---- Geometry. Every helper appends to `scene`, which callers swap to build a cache. ----
   let scene = [];
   const light = [-.45, .79, .41];
-  function shade(hex, f) {
-    const n = parseInt(hex.slice(1), 16);
-    return 'rgb(' + [16, 8, 0].map(s => Math.min(255, Math.round(((n >> s) & 255) * f))).join(',') + ')';
+  // Three printed tones: cool violet in shadow and warm yellow in sunlight.
+  const ink = '#302b49';
+  const swatches = new Map();
+  function shade(hex, value) {
+    if (!swatches.has(hex)) {
+      const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+      const tone = (tint, amount) => 'rgb(' + rgb.map((v, i) => Math.round(mix(v, tint[i], amount))).join(',') + ')';
+      swatches.set(hex, [tone([60, 43, 98], .50), hex, tone([255, 226, 145], .38)]);
+    }
+    return swatches.get(hex)[value < -.10 ? 0 : value < .48 ? 1 : 2];
   }
   function face(a, b, d, col) {
-    const norm = unit(cross(sub(b, a), sub(d, a)));
-    scene.push({v: [a, b, d], col: shade(col, .78 + .26 * Math.abs(dot(norm, light)))});
+    const normal = unit(cross(sub(b, a), sub(d, a)));
+    scene.push({v: [a, b, d], col: shade(col, dot(normal, light))});
   }
   function stroke(a, b, col, width) { scene.push({v: [a, b], col, width}); }
   // Capped cone from a (radius r) to b (radius R).
@@ -43,6 +50,11 @@
       if (i) face(a, b, d, col);
       if (i < 4) face(d, b, e, col);
     }
+    // Broken contour from an oblique meridian, anchored to the form.
+    for (let row=1;row<4;row++) {
+      const j=n*.30+.20*Math.sin(row);
+      stroke(point(row,j),point(row+1,j-.14),n===5?'#476a68':ink,n===5?.019:.008);
+    }
   }
   // Stack of elliptical rings [x, y, radiusX, radiusZ], joined into a sleeve.
   function garment(rings, col) {
@@ -50,7 +62,7 @@
     const point = ([x, y, rx, rz], i) => [x + rx * Math.cos(tau * i / n), y, rz * Math.sin(tau * i / n)];
     for (let row = 1; row < rings.length; row++) for (let i = 0; i < n; i++) {
       const a = point(rings[row - 1], i), b = point(rings[row - 1], i + 1), d = point(rings[row], i), e = point(rings[row], i + 1);
-      face(a, b, d, col); face(d, b, e, col);
+      face(a, d, b, col); face(d, e, b, col);
     }
   }
 
@@ -65,24 +77,80 @@
       strips.push([[x, -.04, z], [x, .24 + rand() * .18, z + side * 1.6], [x, .8 + rand() * 1.4, z + side * 7], [x, 3 + rand() * 3, z + side * 16], [x, 5 + 4 * Math.sin(x * .12) + rand() * 3, z + side * 29]]);
     }
     for (let k = 1; k < strips.length; k++) for (let n = 0; n < 4; n++) {
-      const a = strips[k - 1], b = strips[k], col = ['#b8a27a', '#8f996e', '#69836d', '#849a90'][n];
-      face(a[n], a[n + 1], b[n], col); face(b[n], a[n + 1], b[n + 1], col);
+      const a = strips[k - 1], b = strips[k], col = ['#e7ad72', '#a0bd64', '#a68aa7', '#e6a98f'][n];
+      // Both banks face the sky; the linework sits on their actual slopes.
+      if (side > 0) {
+        face(a[n], a[n + 1], b[n], col); face(b[n], a[n + 1], b[n + 1], col);
+      } else {
+        face(a[n], b[n], a[n + 1], col); face(b[n], b[n + 1], a[n + 1], col);
+      }
+      const raised = v => add(v, [0, .035, 0]);
+      const midway = (v, w, u) => v.map((c, i) => mix(c, w[i], u));
+      if (n === 0 || n === 3) {
+        stroke(raised(a[n + 1]), raised(midway(a[n + 1], b[n + 1], .83)), n ? '#826080' : '#876052', n ? .055 : .039);
+      }
+      if (n >= 2 && k % 3 !== 0) {
+        for (let h = 0; h < 4; h++) {
+          const start = midway(a[n], b[n], .14 + .15 * h);
+          const end = midway(start, a[n + 1], .36 + .04 * h);
+          stroke(raised(start), raised(end), n === 2 ? '#806888' : '#bb8a93', .032);
+        }
+      }
     }
     // Trees. The near bank stays clear in front of the angler.
     for (let k = 0; k < 66; k++) {
-      const x = rand() * 83 - 41, z = bank(x, side) + side * (2 + rand() * 3), y = .48, t = .55 + rand() * 1.45;
+      const x = rand() * 83 - 41, offset = 2 + rand() * 3, z = bank(x, side) + side * offset;
+      const column = Math.floor((x + 60) / 3), u = (x + 60) / 3 - column;
+      const ground = level => mix(strips[column][level][1], strips[column + 1][level][1], u);
+      const y = mix(ground(1), ground(2), (offset - 1.6) / 5.4) - .09, t = .55 + rand() * 1.45;
       if (side > 0 && Math.abs(x) < 16) continue;
-      tube([x, y, z], [x, y + t, z], .07, .045, '#655747', 4);
-      tube([x, y + t * .5, z], [x, y + t * 1.8, z], t * .5, .02, '#516f52', 6);
+      const lean = .27 * Math.sin(k * 3.7);
+      const fork = [x + lean, y + t, z];
+      tube([x, y, z], fork, .075, .045, '#925c5d', 5);
+      // Asymmetric clumps and short broken marks give the foliage a drawn silhouette.
+      for (let l = 0; l < 3; l++) {
+        const cx = x + lean + (l - 1) * .36 * t, cy = y + t * (1.38 + (l === 1 ? .31 : 0));
+        const cz = z + .16 * Math.cos(k + l);
+        const radius = t * (.46 + .11 * rand());
+        oval([cx, cy, cz], [radius, radius * .79, radius * .68], ['#388579', '#67a759', '#93b75c'][l], 5);
+        for (const sign of [-1, 1]) {
+          stroke([cx - radius * .65, cy, cz + sign * radius * .46],
+            [cx - radius * .30, cy - radius * .23, cz + sign * radius * .58], '#365669', .028);
+        }
+      }
     }
   }
-  for (let k = 0; k < 95; k++) { // Rocks.
-    const x = rand() * 50 - 25, z = rand() * 10 - 5, r = .09 + rand() * .33;
-    oval([x, -r * .17, z], [r * 1.6, r, r * .9], '#778984', 5);
+  for (let k = 0; k < 56; k++) {
+    const x = rand() * 50 - 25, z = rand() * 17 - 8.5, r = .07 + rand() ** 2 * .59;
+    const height = (.38 + rand() * .55) * r, count = 7;
+    const cap = [x - .31*r, height, z + .12*r], rim = [], shoulder = [];
+    for (let j=0; j<count; j++) {
+      const a=tau*j/count, dx=Math.cos(a)*r*(1.1+.67*rand()), dz=Math.sin(a)*r*(.74+.26*rand());
+      rim.push([x+dx,.013,z+dz]);
+      shoulder.push([x+dx*.74,height*(.52+.25*rand()),z+dz*.74]);
+    }
+    for (let j=0; j<count; j++) {
+      const next=(j+1)%count, col=k%3===0?'#b59a91':'#898999';
+      face(rim[j],shoulder[j],rim[next],col);
+      face(rim[next],shoulder[j],shoulder[next],col);
+      face(shoulder[next],shoulder[j],cap,col);
+      if(j%3!==1)stroke(shoulder[j],shoulder[next],'#665273',.015);
+      stroke(rim[j],rim[next],'#476673',.013);
+    }
+    for(let j=0;j<3;j++) {
+      const start=shoulder[j],end=shoulder[j+1];
+      const notch=start.map((v,i)=>mix(v,end[i],.42));
+      stroke(notch,notch.map((v,i)=>mix(v,cap[i],.23)), '#685974',.013);
+    }
+    stroke([x-1.65*r,.016,z+.28*r],[x-.65*r,.016,z+.98*r],'#fff2c9',.024);
   }
-  for (let k = 0; k < 650; k++) { // Current streaks.
-    const x = rand() * 66 - 33, z = rand() * 22 - 11;
-    stroke([x, .008, z], [x + rand() * .8 + .12, .009, z + .02], '#acd3c4', .012);
+  // Tapered swashes sit on the water, so their perspective follows the camera.
+  for (let k = 0; k < 420; k++) {
+    const x = rand()*66-33, z = rand()*22-11, len=.25+rand()**2*2.5, width=.025+.13*rand();
+    const a=[x,.008,z], b=[x+.29*len,.008,z+width], c=[x+.76*len,.008,z+.66*width], end=[x+len,.008,z+.035];
+    const color=['#3d9eac','#75cfbc','#b4ead1','#2f92a2'][k%4];
+    scene.push({v:[a,b,c],col:color}, {v:[a,c,end],col:color});
+    if(k%4===0)stroke(b,c,'#fff1c1',.022);
   }
   const world = scene;
   const renderer = createSceneRenderer(canvas, world);
@@ -94,18 +162,29 @@
   function makeBody(jacket, skin) {
     for (const side of [-1, 1]) {
       const hip = [-.02, .90, side * .105], knee = [.055 + side * .095, .51, side * .145], ankle = [side * .17, .14, side * .17];
-      tube(hip, knee, .117, .09, '#646e60'); tube(knee, ankle, .09, .075, '#586354');
+      tube(hip, knee, .117, .09, '#466f70'); tube(knee, ankle, .09, .075, '#39616b');
       oval(add(ankle, [.045, -.058, 0]), [.15, .085, .09], '#454c40');
     }
     garment([[-.02, .78, .135, .17], [-.02, .93, .16, .20], [0, 1.10, .14, .165], [.015, 1.33, .17, .21], [.012, 1.46, .135, .228], [.035, 1.52, .092, .09]], jacket);
     garment([[0, .98, .162, .185], [0, 1.04, .153, .18]], '#414d42');
-    garment([[.008, 1.07, .155, .175], [.017, 1.34, .178, .219], [.011, 1.445, .145, .222], [.035, 1.495, .105, .122]], '#74785a');
+    garment([[.008, 1.07, .155, .175], [.017, 1.34, .178, .219], [.011, 1.445, .145, .222], [.035, 1.495, .105, .122]], '#93874c');
     for (const side of [-1, 1]) oval([.15, 1.23, side * .096], [.042, .069, .073], '#8d8969');
+    // Side seams, trouser creases, eyebrow and collar are drawn on the model.
+    for (const side of [-1,1]) {
+      const z = side * .22;
+      stroke([.03,1.43,z],[.085,1.34,z],ink,.014);
+      stroke([.085,1.34,z],[.06,1.25,z*.98],ink,.012);
+      for (let j=0;j<4;j++) {
+        stroke([-.055+j*.025,1.18,side*.181],[-.084+j*.025,1.12,side*.181],'#574457',.009);
+      }
+      stroke([.101,1.716,side*.071],[.145,1.704,side*.058],ink,.013);
+      stroke([.12+side*.095,.51,side*.205],[.044+side*.095,.47,side*.226],ink,.011);
+    }
     tube([.034, 1.46, 0], [.047, 1.59, 0], .078, .069, skin);
     oval([.057, 1.666, 0], [.109, .144, .09], skin); oval([.150, 1.651, 0], [.035, .029, .034], skin);
     for (const side of [-1, 1]) { oval([.042, 1.653, side * .087], [.027, .035, .013], skin); oval([.132, 1.693, side * .059], [.013, .008, .011], '#453c31'); }
     oval([.017, 1.721, 0], [.095, .085, .092], '#51483a');
-    if (el('hat').checked) { oval([.038, 1.772, 0], [.123, .065, .105], '#506552'); oval([.137, 1.752, 0], [.116, .013, .103], '#404f40'); }
+    if (el('hat').checked) { oval([.038, 1.772, 0], [.123, .065, .105], '#d67746'); oval([.137, 1.752, 0], [.116, .013, .103], '#915649'); }
   }
   // Shoulder to wrist as two fixed-length links. The elbow leans towards the pole vector.
   function limb(shoulder, wrist, pole, jacket, skin) {
@@ -120,7 +199,7 @@
     tube(cuff, wrist, .04, .034, skin);
   }
   function person(grip, angle, bend, lateral) {
-    const jacket = el('coat').value, skin = '#bb8969', key = jacket + el('hat').checked;
+    const jacket = el('coat').value, skin = '#cf9069', key = jacket + el('hat').checked;
     if (key !== bodyKey) {
       const moving = scene;
       scene = []; makeBody(jacket, skin); bodyCache = scene; scene = moving;
@@ -265,11 +344,25 @@
   }
   function paintBackground() {
     const sky = context.createLinearGradient(0, 0, 0, h);
-    sky.addColorStop(0, '#9fc8c8'); sky.addColorStop(.52, '#eadfc4'); sky.addColorStop(1, '#e3dcc1');
+    sky.addColorStop(0, '#6ccbd7'); sky.addColorStop(.54, '#ffdfb1'); sky.addColorStop(1, '#ffecc7');
     context.fillStyle = sky; context.fillRect(0, 0, w, h);
     const horizon = h * .5 - scale * Math.tan(state.elevation);
+    // Distant dry-brush cloud shapes. Their azimuth stays fixed when orbiting.
+    const cloudColors=['#fff2cf','#fae4c2','#ffeac6'];
+    for(let i=0;i<36;i++){
+      const bearing=i*tau/36-state.yaw;
+      if(Math.cos(bearing)<.3)continue;
+      const x=w*.5+scale*Math.tan(bearing);
+      const y=horizon-scale*(.19+.19*(.5+.5*Math.sin(i*17.4)))/Math.cos(bearing);
+      const span=scale*(.19+.07*Math.cos(i*2.8)), rise=span*.11;
+      context.fillStyle=cloudColors[i%3];
+      context.beginPath();context.moveTo(x-span,y);
+      for(const [dx,dy] of [[-.72,-.29],[-.52,-.24],[-.25,-.84],[-.02,-.92],[.12,-.55],[.36,-.48],[.51,-.22],[1,0],[.38,.12],[-.47,.14]])context.lineTo(x+span*dx,y+rise*dy);
+      context.fill();
+      context.fillRect(x+.05*span,y+rise*.40,span*.66,Math.max(1,rise*.12));
+    }
     const water = context.createLinearGradient(0, Math.min(h * .8, Math.max(0, horizon)), 0, h);
-    water.addColorStop(0, '#b3cec0'); water.addColorStop(1, '#3c827e');
+    water.addColorStop(0, '#97d9bc'); water.addColorStop(.48, '#64c6ba'); water.addColorStop(1, '#348ea1');
     context.fillStyle = water; context.fillRect(0, Math.max(0, horizon), w, h);
   }
 
