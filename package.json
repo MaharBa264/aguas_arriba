@@ -1,0 +1,8 @@
+{
+  "name": "aguas-arriba",
+  "private": true,
+  "scripts": {
+    "start": "node serve.js",
+    "test": "node --test"
+  }
+}

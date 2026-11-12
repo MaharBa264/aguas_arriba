@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aguas arriba · Laboratorio de pesca</title>
+<meta name="description" content="Simulación interactiva del lance de pesca con mosca: seguí el levante, el bucle atrás y el golpe adelante, y probá cómo cambian con el viento y el equipo.">
+<meta property="og:title" content="Aguas arriba · El aire y el lance">
+<meta property="og:description" content="Simulación interactiva del lance de pesca con mosca: seguí el levante, el bucle atrás y el golpe adelante, y probá cómo cambian con el viento y el equipo.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#163e39">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%23163e39%22%2F%3E%3Cpath%20d%3D%22M5%2024%20Q10%204%2027%209%22%20fill%3D%22none%22%20stroke%3D%22%23ffcb4c%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%2F%3E%3Ccircle%20cx%3D%2227%22%20cy%3D%229%22%20r%3D%222.4%22%20fill%3D%22%23ce6a39%22%2F%3E%3C%2Fsvg%3E">
+<style>
+* { box-sizing: border-box }
+body { margin: 0; background: #f4f1e8; color: #183c37; font: 16px/1.5 "Trebuchet MS", sans-serif }
+header, main, footer { max-width: 1380px; margin: auto; padding: 18px 5vw }
+header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #c8cfbf }
+header b { font: italic bold 24px Georgia }
+small, .tag { font: 700 11px/1.4 monospace; letter-spacing: .14em; text-transform: uppercase }
+h1 { font: normal clamp(40px, 6vw, 84px)/1 Georgia; margin: 12px 0 }
+h2 { font: normal 30px Georgia; margin: 0 0 12px }
+p { margin: 8px 0 20px }
+a { color: inherit }
+footer { font-size: 13px }
+
+button, select { background: #f6f3e8; color: #153d36; border: 1px solid #a8b3a4; border-radius: 7px; padding: 7px; font: inherit }
+button { cursor: pointer }
+input { accent-color: #ce6a39 }
+label { display: block; font-size: 14px; margin: 8px 0 }
+label select, label input[type=range] { display: block; width: 100% }
+
+/* The stage stays in view while the controls and chapters scroll beside it. */
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px }
+.stage { position: sticky; top: 6px; align-self: start; background: #163e39; color: white; border-radius: 16px; overflow: hidden }
+.stamp { position: absolute; z-index: 1; pointer-events: none; top: 14px; left: 16px; font: 600 11px monospace; letter-spacing: .1em; color: #1e4d4c; background: #fbf7e9df; border-radius: 3px; padding: 6px 9px }
+/* pan-y: a vertical swipe scrolls the page, a horizontal drag turns the camera. */
+canvas { width: 100%; height: clamp(310px, 52vh, 600px); display: block; touch-action: pan-y; cursor: grab }
+.tools { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 6px 14px; background: #24534d }
+.tools select { font-size: 13px }
+.tools label { display: flex; gap: 8px; align-items: center; margin: 0 }
+.tools input { width: 80px }
+.caption { padding: 16px 20px }
+.phase { color: #fed191 }
+.row { display: flex; align-items: center; gap: 12px }
+.row input { flex: 1; min-width: 30px }
+
+aside { padding: 18px; background: #e7e9dd; border-radius: 16px }
+fieldset { margin: 0 0 16px; padding: 8px 0; border: 0; border-top: 1px solid #aab8a6 }
+legend { font: italic 23px Georgia; padding-right: 8px }
+
+.chapters { padding-top: 24px }
+.chapters article { padding: 18px 0; border-top: 1px solid #b6c2b4 }
+.chapters article p { margin-bottom: 12px }
+.chapters button { font-size: 14px }
+
+@media (max-width: 800px) {
+  .grid { display: block }
+  .stage { z-index: 2; margin-bottom: 12px }
+  canvas { height: 34vh; min-height: 215px }
+  .caption { padding: 8px 12px }
+  .caption p { font-size: 13px; margin: 2px 0 }
+  .stage button { font-size: 13px }
+  .stage small { font-size: 10px }
+}
+</style>
+</head>
+<body>
+<header><b>Aguas arriba</b><small>Cuaderno de río</small></header>
+
+<main>
+  <div class="tag">Técnicas de pesca / Mosca</div>
+  <h1>El aire y el lance.</h1>
+  <p>Seguí un lance completo: el levante, el bucle atrás y el golpe adelante hasta que la mosca toca el agua.</p>
+
+  <div class="grid">
+    <section class="stage" aria-label="Escena del lance">
+      <div class="stamp">Cuaderno de campo · Lance básico</div>
+      <canvas role="img" aria-label="Vista tridimensional del pescador, el río y la línea"></canvas>
+      <div class="tools">
+        <select id="view" aria-label="Vista de cámara">
+          <option value="oblique">Tres cuartos</option>
+          <option value="side" selected>De perfil</option>
+          <option value="detail">Detalle de caña y brazo</option>
+          <option value="rear">Desde atrás</option>
+          <option value="above">Desde arriba</option>
+          <option hidden value="free">Vista libre</option>
+        </select>
+        <label>Zoom <input id="zoom" type="range" min="0.65" max="2.6" step=".05" value="1"></label>
+      </div>
+      <div class="caption">
+        <small class="phase" id="phase"></small>
+        <p id="hint"></p>
+        <div class="row">
+          <button id="play"><span id="playIcon" aria-hidden="true">▶</span> <span id="playText">Reproducir</span></button>
+          <select id="rate" aria-label="Velocidad de reproducción">
+            <option value="1">1×</option>
+            <option value=".5" selected>½×</option>
+          </select>
+          <input id="time" aria-label="Fase del lance" type="range" min="0" max="1000" value="0">
+        </div>
+      </div>
+    </section>
+
+    <div class="side">
+      <aside>
+        <fieldset>
+          <legend>Viento</legend>
+          <label>Intensidad · <output id="speed"></output>
+            <input id="wind" type="range" min="0" max="50" value="0">
+          </label>
+          <label>Dirección del flujo
+            <select id="dir">
+              <option value="90">Cruzado hacia la otra orilla</option>
+              <option value="-90">Cruzado hacia el pescador</option>
+              <option value="0">A favor del lance</option>
+              <option value="180">En contra del lance</option>
+            </select>
+          </label>
+          <label><input id="dust" type="checkbox" checked> Mostrar partículas</label>
+          <label><input id="gust" type="checkbox"> Ráfagas variables</label>
+          <button id="puntano">Viento puntano</button>
+          <small id="note" role="status"></small>
+        </fieldset>
+        <fieldset>
+          <legend>Equipo</legend>
+          <div id="gear"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Pescador</legend>
+          <label>Campera
+            <select id="coat">
+              <option value="#c36436">Arcilla</option>
+              <option value="#436c58">Monte</option>
+              <option value="#435e87">Azul sierra</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="hat" checked> Usar gorra</label>
+        </fieldset>
+      </aside>
+
+      <section class="chapters">
+        <h2>Leer el lance</h2>
+        <article>
+          <b>El movimiento en cámara lenta</b>
+          <p>Seguí la nariz del bucle: al frenarse la empuñadura, la rama superior sigue avanzando. En el <a href="https://www.youtube.com/watch?v=hxMSwFg1cn0&t=38s" target="_blank" rel="noopener">video de Chris Myers, desde los 38 s</a>, podés comparar el despliegue de perfil.</p>
+          <button data-moment="start" data-view="side" data-rate=".5" data-play>Ver en cámara lenta</button>
+        </article>
+        <article>
+          <b>La pausa atrás</b>
+          <p>Observá la punta de la caña. Cuando se detiene, el bucle sigue viajando hacia atrás. Esperá a que la línea esté casi extendida antes de iniciar el golpe adelante.</p>
+          <button data-moment="pause" data-view="side">Ver la pausa de perfil</button>
+        </article>
+        <article>
+          <b>De la línea a la mosca</b>
+          <p>Seguí el tramo dorado de la línea hasta el líder cónico, marcado en blanco. Su extremo fino es el tippet, donde se ata la mosca. El esquema exagera los grosores para que puedas distinguirlos.</p>
+          <button data-moment="end" data-view="oblique">Ver la línea posada</button>
+        </article>
+        <article>
+          <b>Una prueba con viento</b>
+          <p>Detenete en la presentación, elegí viento cruzado y girá la cámara. Compará calma y ráfaga en esa misma posición. El viento actúa sobre cada tramo según su velocidad relativa al aire. Elegí ½× para seguir el bucle en cámara lenta.</p>
+          <button data-moment="presentation">Ir a la presentación</button>
+        </article>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>Modelo didáctico de masas y tramos de longitud restringida. El gesto, la flexibilidad y los coeficientes son aproximados. · <a href="https://doi.org/10.3233/SAV-2010-0605">Dinámica del lance</a> · <a href="https://rhexman.github.io/RHex/">RHexCast3D</a> · <a href="https://www.orvis.com/what-are-leaders-and-tippet-and-why-cant-i-just-use-monofilament.html">Líder y tippet</a> · <a href="https://howtoflyfish.orvis.com/video-lessons/fly-casting/235-overhead-cast-importance-of-the-pause-and-rod-angles">La pausa en el lance</a></footer>
+
+<!-- Classic scripts, in dependency order, so the page also opens with a double click. -->
+<script src="cast-model.js"></script>
+<script src="controls.js"></script>
+<script src="gpu-scene.js"></script>
+<script src="river.js"></script>
+</body>
+</html>
