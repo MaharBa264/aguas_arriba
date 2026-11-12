@@ -56,16 +56,6 @@
       stroke(point(row,j),point(row+1,j-.14),n===5?'#476a68':ink,n===5?.019:.008);
     }
   }
-  // Stack of elliptical rings [x, y, radiusX, radiusZ], joined into a sleeve.
-  function garment(rings, col) {
-    const n = 12;
-    const point = ([x, y, rx, rz], i) => [x + rx * Math.cos(tau * i / n), y, rz * Math.sin(tau * i / n)];
-    for (let row = 1; row < rings.length; row++) for (let i = 0; i < n; i++) {
-      const a = point(rings[row - 1], i), b = point(rings[row - 1], i + 1), d = point(rings[row], i), e = point(rings[row], i + 1);
-      face(a, d, b, col); face(d, e, b, col);
-    }
-  }
-
   // ---- Terrain: built once, with a fixed seed so it never changes between visits. ----
   let seed = 917;
   function rand() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
@@ -159,32 +149,115 @@
 
   // ---- Angler ----
   let bodyCache = [], bodyKey = '';
-  function makeBody(jacket, skin) {
-    for (const side of [-1, 1]) {
-      const hip = [-.02, .90, side * .105], knee = [.055 + side * .095, .51, side * .145], ankle = [side * .17, .14, side * .17];
-      tube(hip, knee, .117, .09, '#466f70'); tube(knee, ankle, .09, .075, '#39616b');
-      oval(add(ankle, [.045, -.058, 0]), [.15, .085, .09], '#454c40');
+  // A continuous skin between cross sections avoids visible ball-and-socket joints.
+  // Both triangles of a panel share its light, so the diagonal never appears on fabric or skin.
+  const clothTones=new Map();
+  function figureTone(color,normal) {
+    if (!clothTones.has(color)) {
+      const rgb=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16));
+      const ramp=[-.50,-.34,-.18,-.06,.05,.17,.30].map(amount=>{
+        const tint=amount<0?[79,56,80]:[255,223,163];
+        return 'rgb('+rgb.map((v,i)=>Math.round(mix(v,tint[i],Math.abs(amount)))).join(',')+')';
+      });
+      clothTones.set(color,ramp);
     }
-    garment([[-.02, .78, .135, .17], [-.02, .93, .16, .20], [0, 1.10, .14, .165], [.015, 1.33, .17, .21], [.012, 1.46, .135, .228], [.035, 1.52, .092, .09]], jacket);
-    garment([[0, .98, .162, .185], [0, 1.04, .153, .18]], '#414d42');
-    garment([[.008, 1.07, .155, .175], [.017, 1.34, .178, .219], [.011, 1.445, .145, .222], [.035, 1.495, .105, .122]], '#93874c');
-    for (const side of [-1, 1]) oval([.15, 1.23, side * .096], [.042, .069, .073], '#8d8969');
-    // Side seams, trouser creases, eyebrow and collar are drawn on the model.
-    for (const side of [-1,1]) {
-      const z = side * .22;
-      stroke([.03,1.43,z],[.085,1.34,z],ink,.014);
-      stroke([.085,1.34,z],[.06,1.25,z*.98],ink,.012);
-      for (let j=0;j<4;j++) {
-        stroke([-.055+j*.025,1.18,side*.181],[-.084+j*.025,1.12,side*.181],'#574457',.009);
+    const lighting=dot(normal,[.39,.77,.50]);
+    return clothTones.get(color)[Math.min(6,Math.max(0,Math.floor(3.5+lighting*3.5)))];
+  }
+  function skinPanels(rings, col) {
+    for (let row=1; row<rings.length; row++) {
+      const lo=rings[row-1], hi=rings[row];
+      for (let i=0; i<lo.length; i++) {
+        const j=(i+1)%lo.length, a=lo[i], b=lo[j], c=hi[i], d=hi[j];
+        const normal=unit(cross(sub(d,a),sub(b,c)));
+        const tone=figureTone(col,normal);
+        scene.push({v:[a,c,b],col:tone, skin:true},{v:[b,c,d],col:tone, skin:true});
       }
-      stroke([.101,1.716,side*.071],[.145,1.704,side*.058],ink,.013);
-      stroke([.12+side*.095,.51,side*.205],[.044+side*.095,.47,side*.226],ink,.011);
     }
-    tube([.034, 1.46, 0], [.047, 1.59, 0], .078, .069, skin);
-    oval([.057, 1.666, 0], [.109, .144, .09], skin); oval([.150, 1.651, 0], [.035, .029, .034], skin);
-    for (const side of [-1, 1]) { oval([.042, 1.653, side * .087], [.027, .035, .013], skin); oval([.132, 1.693, side * .059], [.013, .008, .011], '#453c31'); }
-    oval([.017, 1.721, 0], [.095, .085, .092], '#51483a');
-    if (el('hat').checked) { oval([.038, 1.772, 0], [.123, .065, .105], '#d67746'); oval([.137, 1.752, 0], [.116, .013, .103], '#915649'); }
+  }
+  function profile(sections, col, sides=18) {
+    // Each horizontal section describes its centre (x,y,z) and its two radii.
+    skinPanels(sections.map(([x,y,z,rx,rz])=>Array.from({length:sides},(_,i)=>{
+      const angle=tau*i/sides;
+      return [x+rx*Math.cos(angle),y,z+rz*Math.sin(angle)];
+    })),col);
+  }
+  function lineArt(points, color, width) {
+    for(let i=1;i<points.length;i++)stroke(points[i-1],points[i],color,width);
+  }
+  function sleeve(sections,col) {
+    const rings=sections.map(([point,radius],i)=>{
+      const axis=unit(sub(sections[Math.min(i+1,sections.length-1)][0],sections[Math.max(0,i-1)][0]));
+      const tangent=unit(cross([0,0,1],axis)), across=cross(tangent,axis);
+      return Array.from({length:10},(_,j)=>add(point,add(mul(tangent,radius*Math.cos(tau*j/10)),mul(across,radius*.89*Math.sin(tau*j/10)))));
+    });
+    skinPanels(rings,col);
+  }
+  const lerpPoint=(a,b,t)=>a.map((v,i)=>mix(v,b[i],t));
+  function makeBody(jacket, skin) {
+    for (const side of [-1,1]) {
+      const ankle=side*.15, knee=.062+side*.10, z=side*.145;
+      profile([[ankle,.105,z,.069,.068],[ankle,.20,z,.075,.074],[ankle*.6,.34,z,.092,.088],
+        [knee,.49,z,.094,.094],[knee-.025,.57,z,.104,.098],[.018+side*.06,.71,z*.91,.121,.109],
+        [-.018,.86,z*.76,.132,.123],[-.018,.93,z*.72,.109,.107]],'#516d67');
+      profile([[ankle+.049,.025,z,.149,.088],[ankle+.053,.054,z,.157,.093],[ankle+.053,.089,z,.15,.091],
+        [ankle+.028,.136,z,.112,.085],[ankle,.19,z,.079,.076],[ankle,.244,z,.079,.078]],'#4b4c42');
+      profile([[ankle,.227,z,.083,.08],[ankle,.249,z,.085,.081],[ankle,.257,z,.077,.074]],'#766e52');
+      lineArt([[knee+.08,.529,z+side*.044],[knee+.039,.50,z+side*.09],[knee-.026,.487,z+side*.088]],'#38505a',.009);
+    }
+    profile([[-.019,.80,0,.137,.188],[-.035,.92,0,.153,.20],[-.051,1.03,0,.14,.164],
+      [-.052,1.14,0,.111,.125],[-.038,1.29,0,.111,.154],[.0,1.40,0,.109,.173],
+      [.017,1.466,0,.092,.134],[.035,1.514,0,.070,.082]],jacket);
+    // Soft fishing vest, a bound hem and two gusseted pockets.
+    profile([[-.047,1.025,0,.145,.176],[-.049,1.057,0,.157,.188],[-.035,1.205,0,.176,.209],
+      [-.017,1.335,0,.186,.231],[.002,1.419,0,.158,.231],[.031,1.48,0,.092,.118]],'#93905d');
+    profile([[-.047,1.028,0,.147,.182],[-.049,1.055,0,.159,.191]],'#626446');
+    for(const side of [-1,1]) {
+      const z=side*.109;
+      profile([[.093,1.082,z,.031,.042],[.102,1.098,z,.049,.059],[.107,1.168,z,.046,.057],
+        [.102,1.188,z,.041,.05]],'#ac9c64',12);
+      lineArt([[.139,1.17,z+side*.029],[.153,1.15,z],[.138,1.168,z-side*.029]],'#615844',.008);
+      lineArt([[.104,1.45,side*.068],[.123,1.38,side*.087],[.142,1.31,side*.047],
+        [.128,1.20,side*.048],[.111,1.06,side*.042]],'#605745',.012);
+    }
+    profile([[.034,1.45,0,.086,.085],[.047,1.545,0,.077,.073],[.065,1.611,0,.085,.075]],skin);
+    profile([[.023,1.475,0,.101,.102],[.041,1.506,0,.101,.095],[.039,1.55,0,.087,.088]],'#427e80');
+
+    // The head has separate brow, cheek, jaw and chin widths and turns slightly towards the near bank.
+    const firstHeadPart=scene.length;
+    const cheek=[.057,1.624,0,.123,.103];
+    profile([[.072,1.541,0,.037,.039],[.074,1.552,0,.063,.061],[.075,1.576,0,.095,.085],
+      [.064,1.598,0,.115,.098],cheek],'#5d4942',22);
+    profile([cheek,[.054,1.655,0,.124,.106],[.05,1.695,0,.123,.109],[.039,1.745,0,.128,.113],
+      [.026,1.79,0,.118,.106],[.018,1.831,0,.091,.084],[.015,1.85,0,.01,.015]],skin,22);
+    profile([[.168,1.638,0,.022,.021],[.182,1.651,0,.033,.030],[.179,1.666,0,.034,.027],
+      [.160,1.697,0,.017,.017],[.153,1.722,0,.012,.014]],skin,14);
+    for(const side of [-1,1]) {
+      profile([[.013,1.628,side*.103,.010,.007],[.015,1.64,side*.106,.024,.014],
+        [.009,1.672,side*.11,.026,.018],[.008,1.681,side*.104,.016,.009]],skin,12);
+      lineArt([[.135,1.699,side*.073],[.151,1.702,side*.059],[.156,1.699,side*.052]],ink,.008);
+      lineArt([[.130,1.717,side*.078],[.146,1.722,side*.064],[.158,1.719,side*.048]],'#503b34',.013);
+      lineArt([[.169,1.631,side*.009],[.174,1.627,side*.027],[.158,1.624,side*.045]],'#624439',.009);
+      stroke([.158,1.614,side*.047],[.172,1.614,side*.016],'#503b39',.006);
+    }
+    const wearingCap=el('hat').checked;
+    profile([[-.018,1.69,0,.087,.104],[-.010,1.72,0,.107,.110],[.007,1.747,0,.120,.114],
+      [.017,wearingCap?1.759:1.796,0,.118,.110],[.012,wearingCap?1.766:1.836,0,.087,.087],
+      [.006,wearingCap?1.769:1.854,0,.006,.006]],'#524541');
+    if(wearingCap){
+      profile([[.015,1.746,0,.146,.134],[.016,1.765,0,.150,.137],[.009,1.799,0,.143,.131],
+        [-.003,1.831,0,.115,.104],[-.022,1.851,0,.070,.066],[-.024,1.857,0,.004,.006]],'#c16b41');
+      profile([[.117,1.742,0,.128,.115],[.120,1.751,0,.14,.119],[.110,1.758,0,.129,.113]],'#92563d');
+      lineArt([[-.072,1.815,.086],[-.006,1.802,.113],[.06,1.776,.118]],'#92553e',.007);
+    }
+    const turn=.38, c=Math.cos(turn), sn=Math.sin(turn);
+    // Vertices are shared between panels; transform each exactly once.
+    const transformed=new Set();
+    for(let i=firstHeadPart;i<scene.length;i++)for(const v of scene[i].v){
+      if(transformed.has(v))continue;
+      transformed.add(v);
+      const x=v[0]-.035,z=v[2];v[0]=.035+x*c-z*sn;v[2]=x*sn+z*c;
+    }
   }
   // Shoulder to wrist as two fixed-length links. The elbow leans towards the pole vector.
   function limb(shoulder, wrist, pole, jacket, skin) {
@@ -193,10 +266,13 @@
     const along = (upper ** 2 - lower ** 2 + distance ** 2) / (2 * distance), radius = Math.sqrt(Math.max(0, upper ** 2 - along ** 2));
     const out = unit(sub(pole, mul(direction, dot(direction, pole))));
     const elbow = add(shoulder, add(mul(direction, along), mul(out, radius)));
-    tube(shoulder, elbow, .092, .07, jacket); oval(shoulder, [.09, .088, .088], jacket, 7);
-    const cuff = add(elbow, mul(sub(wrist, elbow), .8));
-    tube(elbow, cuff, .072, .048, jacket); oval(elbow, [.072, .072, .072], jacket, 7);
-    tube(cuff, wrist, .04, .034, skin);
+    const cuff=lerpPoint(elbow,wrist,.54);
+    sleeve([[lerpPoint(shoulder,[.012,1.40,shoulder[2]*.53],.56),.062],[shoulder,.091],
+      [lerpPoint(shoulder,elbow,.28),.089],[lerpPoint(shoulder,elbow,.68),.074],[lerpPoint(shoulder,elbow,.91),.070],
+      [lerpPoint(elbow,lerpPoint(shoulder,wrist,.5),.08),.067],[lerpPoint(elbow,wrist,.08),.065],
+      [lerpPoint(elbow,wrist,.20),.073],[cuff,.059]],jacket);
+    sleeve([[lerpPoint(elbow,wrist,.45),.061],[cuff,.065],[lerpPoint(elbow,wrist,.60),.059]],jacket);
+    sleeve([[cuff,.049],[lerpPoint(elbow,wrist,.69),.050],[lerpPoint(elbow,wrist,.90),.035],[wrist,.034]],skin);
   }
   function person(grip, angle, bend, lateral) {
     const jacket = el('coat').value, skin = '#cf9069', key = jacket + el('hat').checked;
@@ -217,15 +293,21 @@
     // rises and reaches a little with the hand.
     const wrist = along(grip, -.078, -.012, .018);
     limb([.045 + grip[0] * .10, 1.438 + .07 * (grip[1] - 1.35), .201], wrist, [-.3, -1, .35], jacket, skin);
-    tube(wrist, along(grip, -.03), .034, .04, skin, 7);            // Heel of the hand.
-    tube(along(grip, -.05), along(grip, .05), .043, .041, skin, 8); // Fingers closed round the cork.
-    tube(along(grip, -.025, .037), along(grip, .055, .034), .015, .011, skin, 5); // Thumb on top.
+    sleeve([[wrist,.033],[along(grip,-.045,0,.021),.044],[along(grip,.013,0,.022),.047],[along(grip,.052,0,.012),.034]],skin);
+    for(let i=0;i<4;i++){
+      const x=-.035+i*.023;
+      sleeve([[along(grip,x,-.005,.032),.014],[along(grip,x,-.028,.022),.014],[along(grip,x,-.031,-.005),.011]],skin);
+    }
+    sleeve([[along(grip,-.02,.026,.023),.021],[along(grip,.014,.043,.013),.019],[along(grip,.061,.035,.002),.012]],skin);
 
     // Line hand: it holds the line below the first guide and shadows the rod hand.
     const lineHand = [.27 + .05 * (grip[0] - .3), 1.10 + .12 * (grip[1] - 1.35), -.10];
     limb([.028, 1.435, -.202], add(lineHand, [-.06, .02, -.01]), [-.36, -1, -.4], jacket, skin);
-    tube(add(lineHand, [-.06, .02, -.01]), add(lineHand, [-.02, .005, 0]), .034, .038, skin, 7);
-    tube(add(lineHand, [-.03, 0, 0]), add(lineHand, [.045, 0, 0]), .038, .035, skin, 7);
+    sleeve([[add(lineHand,[-.06,.02,-.01]),.032],[add(lineHand,[-.021,.009,0]),.041],
+      [add(lineHand,[.014,-.002,.003]),.039],[add(lineHand,[.040,.006,0]),.016],
+      [add(lineHand,[.043,.014,0]),.004]],skin);
+    sleeve([[add(lineHand,[-.012,.024,.014]),.018],[add(lineHand,[.012,.033,.014]),.015],
+      [add(lineHand,[.037,.018,.006]),.008]],skin);
 
     // Cork grip, reel and rod.
     const base = along(grip, -.19);
@@ -308,6 +390,10 @@
         const v = sub(pt, camera), z = dot(v, forward);
         return [w * .5 + scale * dot(v, right) / z, h * .5 - scale * dot(v, up) / z, z];
       });
+      if (obj.skin) {
+        const [a,b,c]=verts;
+        if ((b[0]-a[0])*(c[1]-a[1]) >= (b[1]-a[1])*(c[0]-a[0])) continue;
+      }
       const offscreen = [0, 1].some(k => verts.every(v => v[k] < -6) || verts.every(v => v[k] > (k ? h : w) + 6));
       if (verts.some(v => v[2] < .15) || offscreen) continue;
       queue.push({obj, verts, z: verts.reduce((sum, v) => sum + v[2], 0) / verts.length});
@@ -320,7 +406,9 @@
       verts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
       if (obj.width) {
         ctx.strokeStyle = obj.col; ctx.lineWidth = Math.max(obj.width < .02 ? .65 : 1.15, obj.width * scale / z); ctx.lineCap = 'round'; ctx.stroke();
-      } else { ctx.closePath(); ctx.fillStyle = obj.col; ctx.fill(); }
+      } else { ctx.closePath(); ctx.fillStyle = obj.col; ctx.fill();
+        if (obj.skin) { ctx.strokeStyle=obj.col; ctx.lineWidth=.5; ctx.stroke(); }
+      }
     }
   }
   function paintSoftware(viewKey, dist, ratio) {
