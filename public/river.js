@@ -206,49 +206,95 @@
       lineArt([[knee+.08,.529,z+side*.044],[knee+.039,.50,z+side*.09],[knee-.026,.487,z+side*.088]],'#38505a',.009);
     }
     profile([[-.019,.80,0,.137,.188],[-.035,.92,0,.153,.20],[-.051,1.03,0,.14,.164],
-      [-.052,1.14,0,.111,.125],[-.038,1.29,0,.111,.154],[.0,1.40,0,.109,.173],
+      [-.052,1.14,0,.130,.149],[-.038,1.29,0,.135,.172],[.0,1.40,0,.121,.186],
       [.017,1.466,0,.092,.134],[.035,1.514,0,.070,.082]],jacket);
-    // Soft fishing vest, a bound hem and two gusseted pockets.
-    profile([[-.047,1.025,0,.145,.176],[-.049,1.057,0,.157,.188],[-.035,1.205,0,.176,.209],
-      [-.017,1.335,0,.186,.231],[.002,1.419,0,.158,.231],[.031,1.48,0,.092,.118]],'#93905d');
-    profile([[-.047,1.028,0,.147,.182],[-.049,1.055,0,.159,.191]],'#626446');
-    for(const side of [-1,1]) {
-      const z=side*.109;
-      profile([[.093,1.082,z,.031,.042],[.102,1.098,z,.049,.059],[.107,1.168,z,.046,.057],
-        [.102,1.188,z,.041,.05]],'#ac9c64',12);
-      lineArt([[.139,1.17,z+side*.029],[.153,1.15,z],[.138,1.168,z-side*.029]],'#615844',.008);
-      lineArt([[.104,1.45,side*.068],[.123,1.38,side*.087],[.142,1.31,side*.047],
-        [.128,1.20,side*.048],[.111,1.06,side*.042]],'#605745',.012);
+    // Waders hug the waist, then rise into a bib at the front of the shirt.
+    const bibRings = [
+      [-.019,.82,.150,.191,0],[-.035,.94,.159,.202,0],
+      [-.051,1.023,.148,.179,0],[-.049,1.065,.146,.177,.045],
+      [-.026,1.085,.145,.180,.205]
+    ].map(([x,y,rx,rz,rise])=>Array.from({length:32},(_,i)=>{
+      const a=tau*i/32, front=Math.max(0,Math.cos(a));
+      return [x+rx*Math.cos(a), y+rise*front**.65,rz*Math.sin(a)];
+    }));
+    skinPanels(bibRings,'#516d67');
+    lineArt([...bibRings.at(-1),bibRings.at(-1)[0]],'#334f53',.009);
+    for(const side of [-1,1]){
+      // Broad woven straps follow the shoulder from the bib to the back.
+      const strap=[[.099,1.263,.084],[.104,1.335,.090],[.093,1.412,.090],
+        [.050,1.465,.083],[.005,1.477,.078],[-.058,1.447,.090],
+        [-.112,1.38,.090],[-.140,1.26,.095],[-.155,1.078,.100]];
+      const edges=strap.map(([x,y,z])=>[[x,y,side*(z-.014)],[x,y,side*(z+.014)]]);
+      for(let i=1;i<edges.length;i++){
+        const [a,b]=edges[i-1],[c,d]=edges[i];
+        scene.push({v:[a,b,c],col:'#454945'},{v:[b,c,d],col:'#454945'});
+      }
+      stroke([.106,1.30,side*.074],[.106,1.30,side*.106],'#d7ae69',.012);
     }
-    profile([[.034,1.45,0,.086,.085],[.047,1.545,0,.077,.073],[.065,1.611,0,.085,.075]],skin);
-    profile([[.023,1.475,0,.101,.102],[.041,1.506,0,.101,.095],[.039,1.55,0,.087,.088]],'#427e80');
+    profile([[.034,1.45,0,.080,.079],[.049,1.54,0,.069,.066],[.065,1.61,0,.080,.074]],skin);
+    // A folded neckerchief with its knot and two short tails to one side.
+    profile([[.033,1.477,0,.086,.096],[.041,1.506,0,.098,.096],[.044,1.543,0,.081,.080]],'#ad5137');
+    face([.048,1.52,.083],[.095,1.497,.076],[.116,1.422,.088],'#b8573b');
+    face([.048,1.52,.083],[.077,1.497,.093],[.036,1.446,.109],'#cb6943');
 
-    // The head has separate brow, cheek, jaw and chin widths and turns slightly towards the near bank.
+    // Sculpt one silhouette from nape to forehead. Nose, chin and cheekbones
+    // are part of that surface, so the profile also works in the reverse view.
     const firstHeadPart=scene.length;
-    const cheek=[.057,1.624,0,.123,.103];
-    profile([[.072,1.541,0,.037,.039],[.074,1.552,0,.063,.061],[.075,1.576,0,.095,.085],
-      [.064,1.598,0,.115,.098],cheek],'#5d4942',22);
-    profile([cheek,[.054,1.655,0,.124,.106],[.05,1.695,0,.123,.109],[.039,1.745,0,.128,.113],
-      [.026,1.79,0,.118,.106],[.018,1.831,0,.091,.084],[.015,1.85,0,.01,.015]],skin,22);
-    profile([[.168,1.638,0,.022,.021],[.182,1.651,0,.033,.030],[.179,1.666,0,.034,.027],
-      [.160,1.697,0,.017,.017],[.153,1.722,0,.012,.014]],skin,14);
-    for(const side of [-1,1]) {
-      profile([[.013,1.628,side*.103,.010,.007],[.015,1.64,side*.106,.024,.014],
-        [.009,1.672,side*.11,.026,.018],[.008,1.681,side*.104,.016,.009]],skin,12);
-      lineArt([[.135,1.699,side*.073],[.151,1.702,side*.059],[.156,1.699,side*.052]],ink,.008);
-      lineArt([[.130,1.717,side*.078],[.146,1.722,side*.064],[.158,1.719,side*.048]],'#503b34',.013);
-      lineArt([[.169,1.631,side*.009],[.174,1.627,side*.027],[.158,1.624,side*.045]],'#624439',.009);
-      stroke([.158,1.614,side*.047],[.172,1.614,side*.016],'#503b39',.006);
+    const outline=[
+      // height, centre, depth, width, extra projection along the nose ridge
+      [1.531,.091,.012,.018,0],[1.55,.089,.063,.061,.010],
+      [1.576,.080,.097,.088,.016],[1.607,.066,.115,.101,.016],
+      [1.628,.057,.122,.110,.012],[1.652,.051,.129,.119,.017],
+      [1.665,.050,.130,.120,.064],[1.682,.049,.131,.121,.072],
+      [1.715,.045,.131,.119,.038],[1.732,.042,.137,.120,.020],
+      [1.758,.033,.139,.123,.008],[1.803,.020,.136,.122,0],
+      [1.839,.008,.119,.106,0],[1.861,.003,.085,.079,0],[1.875,.001,.002,.002,0]
+    ];
+    const headSides=48;
+    function facialPoint(row,a){
+      const [y,x,depth,width,ridge]=outline[row], f=Math.cos(a), s=Math.sin(a);
+      return [x+depth*f+ridge*Math.max(0,f)**24,y,width*s];
     }
+    const head=outline.map((_,row)=>Array.from({length:headSides},(_,i)=>facialPoint(row,tau*i/headSides)));
     const wearingCap=el('hat').checked;
-    profile([[-.018,1.69,0,.087,.104],[-.010,1.72,0,.107,.110],[.007,1.747,0,.120,.114],
-      [.017,wearingCap?1.759:1.796,0,.118,.110],[.012,wearingCap?1.766:1.836,0,.087,.087],
-      [.006,wearingCap?1.769:1.854,0,.006,.006]],'#524541');
+    const visibleRows=wearingCap ? 11 : head.length;
+    for(let row=1;row<visibleRows;row++){
+      for(let i=0;i<headSides;i++){
+        const j=(i+1)%headSides, f=Math.cos(tau*(i+.5)/headSides);
+        const [a,b,c,d]=[head[row-1][i],head[row-1][j],head[row][i],head[row][j]];
+        const hairline=f<-.22 ? 4 : f<.22 ? 7 : f<.42 ? 9 : 12;
+        const beard=row<=3 || (row===4 && f<.87) || (row===5 && f<.5);
+        const color=row>hairline?'#463f40':beard?'#70635c':skin;
+        const tone=figureTone(color,unit(cross(sub(d,a),sub(b,c))));
+        scene.push({v:[a,c,b],col:tone,skin:true},{v:[b,c,d],col:tone,skin:true});
+      }
+    }
+    for(const side of [-1,1]){
+      // Place the ink on the sculpted face itself so it stays visible from either bank.
+      const mark=(row,a,offset=.003)=>add(facialPoint(row,side*a),[offset,0,side*offset]);
+      lineArt([mark(9,.38),mark(9,.61),mark(8,.88)],'#43343a',.013);
+      lineArt([mark(8,.39),mark(8,.57),mark(8,.75)],'#382f38',.008);
+      lineArt([mark(4,.10),mark(4,.32),mark(5,.53)],'#764a3d',.007);
+      stroke(mark(7,.72),mark(6,.91),'#ad7358',.005);
+      profile([[.014,1.646,side*.111,.006,.005],[.012,1.666,side*.118,.022,.012],
+        [.009,1.695,side*.118,.024,.012],[.009,1.704,side*.112,.010,.005]],skin,12);
+    }
     if(wearingCap){
-      profile([[.015,1.746,0,.146,.134],[.016,1.765,0,.150,.137],[.009,1.799,0,.143,.131],
-        [-.003,1.831,0,.115,.104],[-.022,1.851,0,.070,.066],[-.024,1.857,0,.004,.006]],'#c16b41');
-      profile([[.117,1.742,0,.128,.115],[.120,1.751,0,.14,.119],[.110,1.758,0,.129,.113]],'#92563d');
-      lineArt([[-.072,1.815,.086],[-.006,1.802,.113],[.06,1.776,.118]],'#92553e',.007);
+      // A soft, slightly slouched cap with a curved, tapered bill.
+      profile([[.027,1.752,0,.151,.135],[.016,1.776,0,.149,.132],
+        [.001,1.807,0,.143,.128],[-.022,1.842,0,.116,.109],
+        [-.046,1.86,0,.075,.078],[-.057,1.868,0,.002,.003]],'#bb653e',24);
+      const brim=[];
+      for(let i=-8;i<=8;i++){
+        const u=i/8, arch=1-u*u;
+        brim.push([[.071+.065*arch,1.750+.020*arch,.116*u],
+          [.084+.195*arch,1.738+.027*arch,.126*u]]);
+      }
+      for(let i=1;i<brim.length;i++){
+        const [a,b]=brim[i-1],[c,d]=brim[i];
+        scene.push({v:[a,c,b],col:'#ab603c'},{v:[b,c,d],col:'#ab603c'});
+        stroke(b,d,'#6a4940',.007);
+      }
     }
     const turn=.38, c=Math.cos(turn), sn=Math.sin(turn);
     // Vertices are shared between panels; transform each exactly once.
@@ -256,7 +302,8 @@
     for(let i=firstHeadPart;i<scene.length;i++)for(const v of scene[i].v){
       if(transformed.has(v))continue;
       transformed.add(v);
-      const x=v[0]-.035,z=v[2];v[0]=.035+x*c-z*sn;v[2]=x*sn+z*c;
+      const x=(v[0]-.035)*1.19,z=v[2]*1.19;
+      v[0]=.035+x*c-z*sn; v[2]=x*sn+z*c; v[1]=1.53+(v[1]-1.53)*1.14;
     }
   }
   // Shoulder to wrist as two fixed-length links. The elbow leans towards the pole vector.
@@ -267,10 +314,10 @@
     const out = unit(sub(pole, mul(direction, dot(direction, pole))));
     const elbow = add(shoulder, add(mul(direction, along), mul(out, radius)));
     const cuff=lerpPoint(elbow,wrist,.54);
-    sleeve([[lerpPoint(shoulder,[.012,1.40,shoulder[2]*.53],.56),.062],[shoulder,.091],
-      [lerpPoint(shoulder,elbow,.28),.089],[lerpPoint(shoulder,elbow,.68),.074],[lerpPoint(shoulder,elbow,.91),.070],
+    sleeve([[lerpPoint(shoulder,[.012,1.40,shoulder[2]*.53],.56),.062],[shoulder,.078],
+      [lerpPoint(shoulder,elbow,.28),.079],[lerpPoint(shoulder,elbow,.68),.074],[lerpPoint(shoulder,elbow,.91),.070],
       [lerpPoint(elbow,lerpPoint(shoulder,wrist,.5),.08),.067],[lerpPoint(elbow,wrist,.08),.065],
-      [lerpPoint(elbow,wrist,.20),.073],[cuff,.059]],jacket);
+      [lerpPoint(elbow,wrist,.20),.066],[cuff,.059]],jacket);
     sleeve([[lerpPoint(elbow,wrist,.45),.061],[cuff,.065],[lerpPoint(elbow,wrist,.60),.059]],jacket);
     sleeve([[cuff,.049],[lerpPoint(elbow,wrist,.69),.050],[lerpPoint(elbow,wrist,.90),.035],[wrist,.034]],skin);
   }
