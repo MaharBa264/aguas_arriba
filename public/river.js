@@ -217,47 +217,114 @@
     face([.048,1.52,.083],[.095,1.497,.076],[.116,1.422,.088],'#b8573b');
     face([.048,1.52,.083],[.077,1.497,.093],[.036,1.446,.109],'#cb6943');
 
-    // Sculpt one silhouette from nape to forehead. Nose, chin and cheekbones
-    // are part of that surface, so the profile also works in the reverse view.
     const firstHeadPart=scene.length;
-    const outline=[
-      // height, centre, depth, width, extra projection along the nose ridge
-      [1.531,.091,.012,.018,0],[1.55,.089,.063,.061,.010],
-      [1.576,.080,.097,.088,.016],[1.607,.066,.115,.101,.016],
-      [1.628,.057,.122,.110,.012],[1.652,.051,.129,.119,.017],
-      [1.665,.050,.130,.120,.039],[1.682,.049,.131,.121,.044],
-      [1.715,.045,.131,.119,.027],[1.732,.042,.137,.120,.020],
-      [1.758,.033,.139,.123,.008],[1.803,.020,.136,.122,0],
-      [1.839,.008,.119,.106,0],[1.861,.003,.085,.079,0],[1.875,.001,.002,.002,0]
-    ];
-    const headSides=48;
-    function facialPoint(row,a){
-      const [y,x,depth,width,ridge]=outline[row], f=Math.cos(a), s=Math.sin(a);
-      return [x+depth*f+ridge*Math.max(0,f)**24,y,width*s];
-    }
-    const head=outline.map((_,row)=>Array.from({length:headSides},(_,i)=>facialPoint(row,tau*i/headSides)));
     const wearingCap=el('hat').checked;
-    const visibleRows=wearingCap ? 11 : head.length;
-    for(let row=1;row<visibleRows;row++){
-      for(let i=0;i<headSides;i++){
-        const j=(i+1)%headSides, f=Math.cos(tau*(i+.5)/headSides);
-        const [a,b,c,d]=[head[row-1][i],head[row-1][j],head[row][i],head[row][j]];
-        const hairline=f<-.22 ? 4 : f<.22 ? 7 : f<.42 ? 9 : 12;
-        const beard=row<=3 || (row===4 && f<.87) || (row===5 && f<.5);
-        const color=row>hairline?'#463f40':beard?'#70635c':skin;
-        const tone=figureTone(color,unit(cross(sub(d,a),sub(b,c))));
-        scene.push({v:[a,c,b],col:tone,skin:true},{v:[b,c,d],col:tone,skin:true});
-      }
+    // Horizontal sections model the skull. The front half has a flatter face
+    // than the nape, with recessed orbits and projecting cheekbones.
+    const skull=[
+      [1.532,.085,.018,.026],[1.548,.083,.068,.063],[1.570,.078,.093,.082],
+      [1.597,.064,.107,.099],[1.622,.054,.115,.109],[1.650,.046,.121,.117],
+      [1.679,.040,.127,.124],[1.706,.039,.126,.121],[1.731,.035,.135,.122],
+      [1.761,.028,.140,.125],[1.804,.018,.137,.121],[1.840,.010,.115,.107],
+      [1.863,.006,.079,.076],[1.879,.002,.002,.002]
+    ];
+    function section(y){
+      let i=1;
+      while(i<skull.length-1 && skull[i][0]<y)i++;
+      return lerpPoint(skull[i-1],skull[i],Math.max(0,Math.min(1,(y-skull[i-1][0])/(skull[i][0]-skull[i-1][0]))));
     }
+    function cheek(y,z){
+      const [,x,rx,rz]=section(y), lateral=Math.min(1,Math.abs(z)/rz);
+      const orbit=Math.exp(-(((y-1.702)/.021)**2+((lateral-.50)/.29)**2));
+      return x+rx*(1-lateral**2.65)**(1/2.65)-.015*orbit;
+    }
+    const sidesHead=40, angles=Array.from({length:sidesHead},(_,i)=>tau*i/sidesHead);
+    function surface(y,a){
+      const [,x,rx,rz]=section(y), z=rz*Math.sin(a);
+      return [Math.cos(a)>=0 ? cheek(y,z) : x+rx*Math.cos(a),y,z];
+    }
+    // The beard boundary follows the cheek, dips below the lips and rises at the ear.
+    const beardEdge=a=>1.592+.078*Math.sin(a)**2+.012*Math.exp(-((Math.sin(a)/.21)**2));
+    const beardRows=[0,.25,.53,.77,1].map(t=>angles.map(a=>surface(mix(1.532,beardEdge(a),t),a)));
+    skinPanels(beardRows,'#63504a');
+    const hairline=a=>1.697+.076*Math.cos(a)+.014*Math.sin(2*a)-.007*Math.cos(7*a);
+    // Cut the skull at the hairline so the skin cannot poke through the hair.
+    const cheeks=[beardRows.at(-1),...[.18,.38,.62,.82,1].map(t=>
+      angles.map(a=>surface(mix(beardEdge(a),hairline(a),t),a)))];
+    skinPanels(cheeks,skin);
+
+    // Filled patches on the curved face: concentric outlines form a shallow relief.
+    function patch(y,z,outline,color,depth,bulge=0){
+      const point=(dy,dz,d)=>[cheek(y+dy,z+dz)+d,y+dy,z+dz];
+      const center=point(0,0,depth+bulge);
+      const ring=outline.map(([dz,dy])=>point(dy,dz,depth));
+      for(let i=0;i<ring.length;i++)scene.push({v:[ring[i],ring[(i+1)%ring.length],center],col:color});
+    }
+    const ellipse=(w,h)=>Array.from({length:16},(_,i)=>[w*Math.cos(tau*i/16),h*Math.sin(tau*i/16)]);
     for(const side of [-1,1]){
-      // Place the ink on the sculpted face itself so it stays visible from either bank.
-      const mark=(row,a,offset=.003)=>add(facialPoint(row,side*a),[offset,0,side*offset]);
-      lineArt([mark(9,.38),mark(9,.61),mark(8,.88)],'#43343a',.013);
-      lineArt([mark(8,.39),mark(8,.57),mark(8,.75)],'#382f38',.008);
-      lineArt([mark(4,.10),mark(4,.32),mark(5,.53)],'#764a3d',.007);
-      stroke(mark(7,.72),mark(6,.91),'#ad7358',.005);
-      profile([[.014,1.646,side*.111,.006,.005],[.012,1.666,side*.118,.022,.012],
-        [.009,1.695,side*.118,.024,.012],[.009,1.704,side*.112,.010,.005]],skin,12);
+      const z=.055*side, y=1.704;
+      const almond=[[-.034,0],[-.024,.012],[-.007,.017],[.011,.016],[.027,.010],[.035,0],[.021,-.010],[0,-.013],[-.020,-.009]];
+      patch(y,z,almond,'#503e3d',.006,.006);
+      patch(y,z,almond.map(([x,h])=>[x*.87,h*.77]),'#efdebd',.009,.007);
+      patch(y,z,ellipse(.014,.013),'#463c36',.017,.003);
+      patch(y+.004,z+.003,ellipse(.0028,.0028),'#fff3d0',.021);
+      patch(1.737,z,[[-.034,-.004],[-.021,.007],[.005,.010],[.024,.005],[.034,-.003],[.006,.001]],'#513b34',.005);
+      // Rounded-square rims have a real cross-section, including on the profile.
+      const rim=[];
+      for(let i=0;i<32;i++){
+        const a=tau*i/32, c=Math.cos(a),s=Math.sin(a);
+        const zz=side*(.056+.047*Math.sign(c)*Math.abs(c)**.48);
+        const yy=1.704+.031*Math.sign(s)*Math.abs(s)**.52;
+        rim.push([.192-.031*(Math.abs(zz)/.103)**2,yy,zz]);
+      }
+      const frameColor='#493c39';
+      for(let i=0;i<rim.length;i++)tube(rim[i],rim[(i+1)%rim.length],.0038,.0038,frameColor,5);
+      const temple=[rim[3],[.104,1.722,side*.120],[.022,1.712,side*.128],[-.008,1.687,side*.117]];
+      for(let i=1;i<temple.length;i++)tube(temple[i-1],temple[i],.004,.0038,frameColor,6);
+      profile([[.014,1.645,side*.111,.009,.007],[.009,1.66,side*.117,.021,.014],
+        [.006,1.683,side*.121,.028,.017],[.005,1.700,side*.118,.022,.012],[.012,1.709,side*.112,.010,.006]],skin,12);
+      lineArt([[.008,1.661,side*.131],[-.004,1.680,side*.139],[.010,1.692,side*.134]],'#9c674f',.004);
+    }
+    tube([.191,1.715,-.013],[.191,1.715,.013],.004,.004,'#493c39',6);
+    // Bridge, rounded tip and alae share one tapered surface.
+    profile([[.177,1.650,0,.010,.010],[.183,1.656,0,.028,.024],
+      [.186,1.666,0,.043,.026],[.181,1.679,0,.039,.019],
+      [.168,1.701,0,.031,.014],[.158,1.726,0,.015,.011]],skin,20);
+    for(const side of [-1,1])stroke([.204,1.658,side*.016],[.200,1.659,side*.022],'#92634c',.004);
+    const smile=[[-.045,.009],[-.032,.005],[0,.002],[.032,.006],[.044,.011],[.030,-.005],[.003,-.013],[-.023,-.008]];
+    patch(1.627,0,smile,'#73473d',.005,.005);
+    patch(1.627,0,smile.slice(0,5).concat([[.020,-.002],[0,-.004],[-.023,-.001]]),'#e8cba5',.011);
+    // Scalloped hairline and ridged crown form a single swept mass.
+    const hair=[cheeks.at(-1)];
+    for(const t of [0,.11,.32,.57,.78,.91,1]){
+      hair.push(angles.map(a=>{
+        const wave=Math.cos(8*a+.9*Math.sin(2*a)+2*t);
+        const edge=hairline(a);
+        const y=mix(edge,wearingCap?1.761:1.879,t);
+        const p=surface(y,a);
+        const lift=(wearingCap ? .002 : .021)*(1-t)*(.95+.55*wave);
+        return [p[0]+Math.cos(a)*lift,p[1]+(wearingCap?0:.013*t),p[2]+Math.sin(a)*lift];
+      }));
+    }
+    skinPanels(hair,'#51423d');
+    if(!wearingCap){
+      // Overlapping swept locks taper into the temples and break up the crown.
+      for(let lock=0;lock<9;lock++){
+        const base=tau*lock/9;
+        const strands=[0,.18,.43,.70,.91].map(t=>{
+          const mid=base+.68*t, width=.32*Math.sin(Math.PI*(.04+.93*t));
+          return [-1,0,1].map(k=>{
+            const a=mid+k*width, y=mix(hairline(a)-.003,1.88,t);
+            const p=surface(y,a), offset=.021*(1-t)+.001+(1-Math.abs(k))*.014*Math.sin(Math.PI*t);
+            return [p[0]+offset*Math.cos(a),y+.018*t,p[2]+offset*Math.sin(a)];
+          });
+        });
+        for(let r=1;r<strands.length;r++)for(let k=0;k<2;k++){
+          const [a,b]=strands[r-1].slice(k),[c,d]=strands[r].slice(k);
+          const col=k?'#594a40':'#675348';
+          scene.push({v:[a,c,b],col},{v:[b,c,d],col});
+        }
+      }
     }
     if(wearingCap){
       // A soft, slightly slouched cap with a curved, tapered bill.
