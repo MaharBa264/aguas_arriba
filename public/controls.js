@@ -36,11 +36,13 @@ const Controls = (() => {
   const zoomRange = [+el('zoom').min, +el('zoom').max];
   // progress runs from 0 to 1 over the current cast.
   const state = {progress: 0, playing: false, yaw: 0, elevation: .09, zoom: 1, detail: false};
+  let rockSeed = 12345;
+  el('shuffleRocks').onclick = () => { rockSeed = (rockSeed + 2654435761) >>> 0; };
   let cast = null;
 
   const time = () => cast ? state.progress * cast.duration : 0;
   const settings = () => ({
-    rod: idx('rod'), line: idx('line'), weight: idx('weight'), leader: idx('leader'), tip: idx('tip'),
+    rockSeed, rod: idx('rod'), line: idx('line'), weight: idx('weight'), leader: idx('leader'), tip: idx('tip'),
     wind: +el('wind').value, dir: +el('dir').value * Math.PI / 180, gust: el('gust').checked
   });
 
@@ -49,6 +51,7 @@ const Controls = (() => {
     const t = time(), phase = cast ? CastModel.phaseAt(t, cast.timing) : 0;
     let label = fly.phases[phase], hint = fly.hints[phase];
     if (cast && cast.landing && t >= cast.landing.time) { label = 'La mosca toca el agua'; hint = 'La onda marca el punto de contacto.'; }
+    if (cast?.landing?.surface === 'rock' && t >= cast.landing.time) { label = 'La mosca toca una piedra'; hint = 'Observá dónde apoya la línea.'; }
     setText(el('phase'), label);
     setText(el('hint'), hint);
     el('time').value = state.progress * 1000;

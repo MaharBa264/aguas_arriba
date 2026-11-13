@@ -88,3 +88,24 @@ test('the grip keeps moving through the overhead turn for each leader length', (
     }
   }
 });
+
+test('reshuffled rocks support the moving line and its initial drape', () => {
+  const rocks = require('../public/rocks.js');
+  const first = rocks.create(12345).rocks[0];
+  assert.deepStrictEqual(first, rocks.create(12345).rocks[0]);
+  assert.notDeepStrictEqual(first, rocks.create(98765).rocks[0]);
+  for (const rockSeed of [12345, 98765]) {
+    const field = rocks.create(rockSeed), cast = check({...standard, rockSeed}, .08);
+    let contactAfterDelivery = false;
+    for (const [i, frame] of cast.frames.entries()) {
+      for (let j = 3; j < frame.points.length; j += 3) {
+        const [x, y, z] = frame.points.subarray(j, j + 3);
+        const top = field.top(x,z);
+        assert.ok(y >= top - 1e-5);
+        if (i * cast.duration / (cast.frames.length - 1) > cast.timing.front[1] &&
+            top > .08 && y < top + .012) contactAfterDelivery = true;
+      }
+    }
+    assert.ok(contactAfterDelivery);
+  }
+});

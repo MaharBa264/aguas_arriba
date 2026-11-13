@@ -125,6 +125,7 @@ function createSceneRenderer(background, terrain) {
   return {
     // False while the context is lost: the caller draws in software meanwhile.
     get ready() { return ready && !gl.isContextLost(); },
+    setTerrain(objects) { terrain = objects; if (this.ready) upload(fixed, terrain, gl.STATIC_DRAW); },
     setBody(objects) {
       bodyObjects = objects;
       if (this.ready) upload(body, objects, gl.STATIC_DRAW);

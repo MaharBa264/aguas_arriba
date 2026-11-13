@@ -110,30 +110,6 @@
       }
     }
   }
-  for (let k = 0; k < 56; k++) {
-    const x = rand() * 50 - 25, z = rand() * 17 - 8.5, r = .07 + rand() ** 2 * .59;
-    const height = (.38 + rand() * .55) * r, count = 7;
-    const cap = [x - .31*r, height, z + .12*r], rim = [], shoulder = [];
-    for (let j=0; j<count; j++) {
-      const a=tau*j/count, dx=Math.cos(a)*r*(1.1+.67*rand()), dz=Math.sin(a)*r*(.74+.26*rand());
-      rim.push([x+dx,.013,z+dz]);
-      shoulder.push([x+dx*.74,height*(.52+.25*rand()),z+dz*.74]);
-    }
-    for (let j=0; j<count; j++) {
-      const next=(j+1)%count, col=k%3===0?'#b59a91':'#898999';
-      face(rim[j],shoulder[j],rim[next],col);
-      face(rim[next],shoulder[j],shoulder[next],col);
-      face(shoulder[next],shoulder[j],cap,col);
-      if(j%3!==1)stroke(shoulder[j],shoulder[next],'#665273',.015);
-      stroke(rim[j],rim[next],'#476673',.013);
-    }
-    for(let j=0;j<3;j++) {
-      const start=shoulder[j],end=shoulder[j+1];
-      const notch=start.map((v,i)=>mix(v,end[i],.42));
-      stroke(notch,notch.map((v,i)=>mix(v,cap[i],.23)), '#685974',.013);
-    }
-    stroke([x-1.65*r,.016,z+.28*r],[x-.65*r,.016,z+.98*r],'#fff2c9',.024);
-  }
   // Tapered swashes sit on the water, so their perspective follows the camera.
   for (let k = 0; k < 420; k++) {
     const x = rand()*66-33, z = rand()*22-11, len=.25+rand()**2*2.5, width=.025+.13*rand();
@@ -142,7 +118,18 @@
     scene.push({v:[a,b,c],col:color}, {v:[a,c,end],col:color});
     if(k%4===0)stroke(b,c,'#fff1c1',.022);
   }
-  const world = scene;
+  const landscape = scene;
+  let rockField;
+  function terrainFor(seed) {
+    rockField = RiverRocks.create(seed);
+    scene = [];
+    rockField.rocks.forEach(({faces,shoulder},k)=>{
+      for(const {a,b,c} of faces)face(a,b,c,k%3===0?'#b59a91':'#898999');
+      for(let j=0;j<shoulder.length;j+=3)stroke(shoulder[j],shoulder[(j+1)%shoulder.length],'#665273',.015);
+    });
+    return landscape.concat(scene);
+  }
+  let world = terrainFor(Controls.settings().rockSeed);
   const renderer = createSceneRenderer(canvas, world);
   // Decided once per frame. In software mode the body is drawn with everything else.
   let useGpu = false;
@@ -199,37 +186,30 @@
       const ankle=side*.15, knee=.062+side*.10, z=side*.145;
       profile([[ankle,.105,z,.069,.068],[ankle,.20,z,.075,.074],[ankle*.6,.34,z,.092,.088],
         [knee,.49,z,.094,.094],[knee-.025,.57,z,.104,.098],[.018+side*.06,.71,z*.91,.121,.109],
-        [-.018,.86,z*.76,.132,.123],[-.018,.93,z*.72,.109,.107]],'#516d67');
+        [-.018,.86,z*.64,.111,.098],[-.022,.91,z*.52,.088,.076]],'#516d67');
       profile([[ankle+.049,.025,z,.149,.088],[ankle+.053,.054,z,.157,.093],[ankle+.053,.089,z,.15,.091],
         [ankle+.028,.136,z,.112,.085],[ankle,.19,z,.079,.076],[ankle,.244,z,.079,.078]],'#4b4c42');
       profile([[ankle,.227,z,.083,.08],[ankle,.249,z,.085,.081],[ankle,.257,z,.077,.074]],'#766e52');
       lineArt([[knee+.08,.529,z+side*.044],[knee+.039,.50,z+side*.09],[knee-.026,.487,z+side*.088]],'#38505a',.009);
     }
-    profile([[-.019,.80,0,.137,.188],[-.035,.92,0,.153,.20],[-.051,1.03,0,.14,.164],
-      [-.052,1.14,0,.130,.149],[-.038,1.29,0,.135,.172],[.0,1.40,0,.121,.186],
-      [.017,1.466,0,.092,.134],[.035,1.514,0,.070,.082]],jacket);
-    // Waders hug the waist, then rise into a bib at the front of the shirt.
-    const bibRings = [
-      [-.019,.82,.150,.191,0],[-.035,.94,.159,.202,0],
-      [-.051,1.023,.148,.179,0],[-.049,1.065,.146,.177,.045],
-      [-.026,1.085,.145,.180,.205]
-    ].map(([x,y,rx,rz,rise])=>Array.from({length:32},(_,i)=>{
-      const a=tau*i/32, front=Math.max(0,Math.cos(a));
-      return [x+rx*Math.cos(a), y+rise*front**.65,rz*Math.sin(a)];
+    // Shirt and bib share the seam vertices. The suspenders are panels of
+    // the shirt itself, so all three deform together as the shoulders turn.
+    const sides=40;
+    const rows=[
+      [-.019,.82,.150,.204,0],[-.035,.94,.159,.202,0],[-.051,1.03,.149,.178,0],
+      [-.044,1.085,.146,.177,.19],[-.023,1.32,.142,.186,.018],
+      [.005,1.42,.118,.189,0],[.021,1.472,.094,.140,0],[.038,1.512,.069,.079,0]
+    ];
+    const rings=rows.map(([x,y,rx,rz,rise])=>Array.from({length:sides},(_,i)=>{
+      const a=tau*i/sides;
+      return [x+rx*Math.cos(a),y+rise*Math.max(0,Math.cos(a))**.65,rz*Math.sin(a)];
     }));
-    skinPanels(bibRings,'#516d67');
-    lineArt([...bibRings.at(-1),bibRings.at(-1)[0]],'#334f53',.009);
-    for(const side of [-1,1]){
-      // Broad woven straps follow the shoulder from the bib to the back.
-      const strap=[[.099,1.263,.084],[.104,1.335,.090],[.093,1.412,.090],
-        [.050,1.465,.083],[.005,1.477,.078],[-.058,1.447,.090],
-        [-.112,1.38,.090],[-.140,1.26,.095],[-.155,1.078,.100]];
-      const edges=strap.map(([x,y,z])=>[[x,y,side*(z-.014)],[x,y,side*(z+.014)]]);
-      for(let i=1;i<edges.length;i++){
-        const [a,b]=edges[i-1],[c,d]=edges[i];
-        scene.push({v:[a,b,c],col:'#454945'},{v:[b,c,d],col:'#454945'});
-      }
-      stroke([.106,1.30,side*.074],[.106,1.30,side*.106],'#d7ae69',.012);
+    for(let row=1;row<rings.length;row++)for(let i=0;i<sides;i++){
+      const j=(i+1)%sides,a=rings[row-1][i],b=rings[row-1][j],c=rings[row][i],d=rings[row][j];
+      const band=Math.abs(Math.sin(tau*(i+.5)/sides));
+      const cloth=row<=3?'#516d67':band>.43 && band<.67?'#424b46':jacket;
+      const tone=figureTone(cloth,unit(cross(sub(d,a),sub(b,c))));
+      scene.push({v:[a,c,b],col:tone,skin:true},{v:[b,c,d],col:tone,skin:true});
     }
     profile([[.034,1.45,0,.080,.079],[.049,1.54,0,.069,.066],[.065,1.61,0,.080,.074]],skin);
     // A folded neckerchief with its knot and two short tails to one side.
@@ -245,8 +225,8 @@
       [1.531,.091,.012,.018,0],[1.55,.089,.063,.061,.010],
       [1.576,.080,.097,.088,.016],[1.607,.066,.115,.101,.016],
       [1.628,.057,.122,.110,.012],[1.652,.051,.129,.119,.017],
-      [1.665,.050,.130,.120,.064],[1.682,.049,.131,.121,.072],
-      [1.715,.045,.131,.119,.038],[1.732,.042,.137,.120,.020],
+      [1.665,.050,.130,.120,.039],[1.682,.049,.131,.121,.044],
+      [1.715,.045,.131,.119,.027],[1.732,.042,.137,.120,.020],
       [1.758,.033,.139,.123,.008],[1.803,.020,.136,.122,0],
       [1.839,.008,.119,.106,0],[1.861,.003,.085,.079,0],[1.875,.001,.002,.002,0]
     ];
@@ -288,7 +268,7 @@
       for(let i=-8;i<=8;i++){
         const u=i/8, arch=1-u*u;
         brim.push([[.071+.065*arch,1.750+.020*arch,.116*u],
-          [.084+.195*arch,1.738+.027*arch,.126*u]]);
+          [.084+.148*arch,1.738+.027*arch,.126*u]]);
       }
       for(let i=1;i<brim.length;i++){
         const [a,b]=brim[i-1],[c,d]=brim[i];
@@ -296,14 +276,14 @@
         stroke(b,d,'#6a4940',.007);
       }
     }
-    const turn=.38, c=Math.cos(turn), sn=Math.sin(turn);
+    const turn=.24, c=Math.cos(turn), sn=Math.sin(turn);
     // Vertices are shared between panels; transform each exactly once.
     const transformed=new Set();
     for(let i=firstHeadPart;i<scene.length;i++)for(const v of scene[i].v){
       if(transformed.has(v))continue;
       transformed.add(v);
-      const x=(v[0]-.035)*1.19,z=v[2]*1.19;
-      v[0]=.035+x*c-z*sn; v[2]=x*sn+z*c; v[1]=1.53+(v[1]-1.53)*1.14;
+      const x=(v[0]-.035)*.99,z=v[2]*1.02;
+      v[0]=.035+x*c-z*sn; v[2]=x*sn+z*c; v[1]=1.53+(v[1]-1.53)*.98;
     }
   }
   // Shoulder to wrist as two fixed-length links. The elbow leans towards the pole vector.
@@ -422,7 +402,13 @@
   let settings = Controls.settings(), castKey = JSON.stringify(settings), cast = CastModel.simulate(settings);
   let requestedKey = castKey, changedAt = 0, pending = null, worker = null;
   function applyCast(result, key) {
-    cast = result; castKey = key; settings = JSON.parse(key);
+    const nextSettings=JSON.parse(key);
+    if(nextSettings.rockSeed!==settings.rockSeed){
+      world=terrainFor(nextSettings.rockSeed);
+      renderer?.setTerrain(world);
+      cachedTerrainKey='';
+    }
+    cast = result; castKey = key; settings = nextSettings;
     Controls.setCast(cast);
   }
   try {
@@ -460,11 +446,12 @@
       const col = main ? '#ffcb4c' : tippet ? '#fff9ed' : '#fff1ca', width = main ? .038 + settings.weight * .006 : tippet ? .022 : .028;
       for (let piece = 1; piece <= pieces; piece++) {
         const next = curve(nodes[Math.max(0, n - 1)], nodes[n], nodes[n + 1], nodes[Math.min(end, n + 2)], piece / pieces);
+        if(next[1]<.70) next[1]=Math.max(next[1],rockField.top(next[0],next[2])+.005);
         stroke(prev, next, col, width);
         prev = next;
       }
     }
-    if (cast.landing && time >= cast.landing.time) { // Ripple where the fly touched down.
+    if (cast.landing && cast.landing.surface !== 'rock' && time >= cast.landing.time) { // Ripple where the fly touched down.
       const r = .07 + .58 * (time - cast.landing.time);
       const at = k => [cast.landing.x + r * Math.cos(tau * k / 32), .024, cast.landing.z + r * Math.sin(tau * k / 32)];
       for (let i = 0; i < 32; i++) stroke(at(i), at(i + 1), '#e1f2dd', .018);

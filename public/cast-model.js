@@ -50,6 +50,9 @@ const CastModel = (() => {
   }
 
   function simulate(s, overrides) {
+    const terrain = s.rockSeed == null ? null :
+      (typeof RiverRocks === 'undefined' ? require('./rocks.js') : RiverRocks).create(s.rockSeed);
+    const floor = (x,z) => Math.max(waterLevel,terrain.top(x,z)+.006);
     const g = overrides ? {...gesture, ...overrides} : gesture;
     const rod = rodLengths[s.rod], leader = leaders[s.leader], line = lineLength, total = line + leader, ds = total / count;
     const size = (count + 1) * 3, pos = new Float64Array(size), prev = pos.slice(), vel = pos.slice();
@@ -125,6 +128,17 @@ const CastModel = (() => {
         for (let i = 1; i <= count; i++) {
           const j = i * 3, dy = Math.min(ds * .48, Math.max(0, pos[j - 2] - waterLevel));
           pos.set([pos[j - 3] + Math.sqrt(ds * ds - dy * dy), pos[j - 2] - dy, tip[2]], j);
+          if(terrain){
+            // Walk one link length along the bed, including the initial drape.
+            const x=pos[j-3], y=pos[j-2], target=pos[j+1];
+            const height=dx=>Math.max(target,floor(x+dx,tip[2]));
+            let low=0, high=ds;
+            for(let pass=0;pass<16;pass++){
+              const dx=(low+high)/2;
+              if(Math.hypot(dx,height(dx)-y)>ds)high=dx; else low=dx;
+            }
+            pos[j]=x+low; pos[j+1]=height(low);
+          }
         }
       } else {
         prev.set(pos);
@@ -181,6 +195,16 @@ const CastModel = (() => {
           for (let i = 1; i <= count; i++) {
             const j = 3 * i;
             pos[j + 1] = Math.max(waterLevel, pos[j + 1]);
+            if(terrain && pos[j+1]<.75){
+              pos[j+1]=Math.max(pos[j+1],floor(pos[j],pos[j+2]));
+              // Check between nodes too, particularly at a crest or a small rock.
+              const midFloor=floor((pos[j]+pos[j-3])*.5,(pos[j+2]+pos[j-1])*.5);
+              const lift=midFloor-(pos[j+1]+pos[j-2])*.5;
+              if(lift>0){
+                pos[j+1]+=i===1?2*lift:lift;
+                if(i>1)pos[j-2]+=lift;
+              }
+            }
             if (pos[j + 1] >= body.height) continue;
             const dx = pos[j] - body.x, dz = pos[j + 2] - body.z, distance = Math.hypot(dx, dz);
             if (distance >= body.radius) continue;
@@ -207,8 +231,9 @@ const CastModel = (() => {
       }
 
       const flyHeight = pos[size - 2];
-      if (!landing && timing.front && t > timing.front[1] && flyHeight <= waterLevel + .00001) {
-        landing = {time: t, x: pos[size - 3], z: pos[size - 1]};
+      const support=terrain && flyHeight<.75 ? floor(pos[size-3],pos[size-1]) : waterLevel;
+      if (!landing && timing.front && t > timing.front[1] && flyHeight <= support + .00001) {
+        landing = {surface: support>waterLevel ? 'rock' : 'water', time: t, x: pos[size - 3], z: pos[size - 1]};
       }
       if (n % frameskip === 0) {
         frames.push({hand, angle, curvature, lateral, points: Float32Array.from(pos)});
