@@ -77,3 +77,14 @@ test('phases follow the timing of each cast, and the caster waits for the line',
   const long = CastModel.simulate({...standard, leader: 2}).timing;
   assert.ok(long.front[0] > timing.front[0]);
 });
+
+test('the grip keeps moving through the overhead turn for each leader length', () => {
+  for (const leader of [0, 1, 2]) {
+    const {frames, timing, duration} = CastModel.simulate({...standard, leader});
+    const dt = duration / (frames.length - 1);
+    for (let i = Math.ceil(timing.back[0] / dt); i * dt <= timing.front[1]; i++) {
+      const delta = frames[i].hand.map((value, axis) => value - frames[i - 1].hand[axis]);
+      assert.ok(Math.hypot(...delta) / dt > .015, 'grip stalls at ' + i * dt);
+    }
+  }
+});

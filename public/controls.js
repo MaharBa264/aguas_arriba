@@ -19,7 +19,7 @@ const Controls = (() => {
     middleByDefault: ['rod', 'weight', 'leader', 'tip'],
     // Indexed by CastModel.phaseAt.
     phases: ['Levante', 'Golpe atrás', 'Pausa atrás', 'Golpe adelante', 'Presentación'],
-    hints: ['Elevá la punta para despegar la línea.', 'Acelerá hacia atrás y detené la caña.', 'La caña se detuvo. El bucle todavía viaja.', 'Acelerá adelante y volvé a detener la punta.', 'Seguí el líder hasta donde posa la mosca.']
+    hints: ['Elevá la punta para despegar la línea.', 'Acelerá hacia atrás y dejá que se forme el bucle.', 'La mano sigue subiendo mientras el bucle se estira atrás.', 'Acelerá adelante y volvé a detener la punta.', 'Seguí el líder hasta donde posa la mosca.']
   };
   for (const [id, [label, ...options]] of Object.entries(fly.gear)) {
     const wrapper = document.createElement('label'), select = document.createElement('select');

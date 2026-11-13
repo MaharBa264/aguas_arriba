@@ -13,11 +13,11 @@ const CastModel = (() => {
   // The caster's gesture. Angles are the rod butt's, in radians above the forward
   // horizontal. Hand points are [x, y] in metres. Times are seconds.
   const gesture = {
-    startAngle: -.33, liftAngle: .81, backAngle: 1.77, driftAngle: 0, frontAngle: .55, endAngle: -.25,
+    startAngle: -.33, liftAngle: .81, backAngle: 1.77, driftAngle: .075, frontAngle: .55, endAngle: -.25,
     startHand: [.40, 1.15], liftHand: [.40, 1.42], backHand: [-.05, 1.56], frontHand: [.49, 1.35], endHand: [.50, 1.12],
     // During the pause the hand keeps drifting up and back, and the rod with it.
     driftHand: [-.03, .05],
-    liftTime: .46, blend: .08, backTime: .23, frontTime: .345, lowerDelay: .02, lowerTime: 1, driftTime: .7,
+    liftTime: .46, blend: .132, backTime: .23, frontTime: .345, lowerDelay: -.085, lowerTime: 1, driftTime: .7,
     // The forward stroke starts once the back cast has unrolled this fraction of its length
     // (it reaches about 0.95 by the time the stroke peaks), within these pause bounds.
     extension: .55, minPause: .2, maxPause: 1.3,
@@ -92,7 +92,9 @@ const CastModel = (() => {
 
     for (let n = 0; n <= maxTime / step; n++) {
       const t = n * step;
-      const lift = ease(t / g.liftTime), back = (t - backStart) / g.backTime, drift = ease((t - backEnd) / g.driftTime);
+      const lift = ease(t / g.liftTime), back = (t - backStart) / g.backTime;
+      const driftTime = Math.max(0, (t - backEnd + .1) / g.driftTime);
+      const drift = -Math.expm1(-2 * driftTime ** 2);
       const front = (t - frontStart) / g.frontTime, lower = ease((t - frontStart - g.frontTime - g.lowerDelay) / g.lowerTime);
       const backTop = g.backAngle + g.driftAngle;
       const angle = g.startAngle + (g.liftAngle - g.startAngle) * lift + (g.backAngle - g.liftAngle) * stroke(back) + g.driftAngle * drift
@@ -105,6 +107,10 @@ const CastModel = (() => {
       blendPoint([g.backHand[0] + g.driftHand[0], g.backHand[1] + g.driftHand[1]], g.frontHand, ease(front), hand);
       blendPoint(g.frontHand, g.endHand, lower, hand);
 
+      // A shallow outside arc carries the elbow through the high reversal.
+      // Its tangent is already moving at the rear stop, before the return.
+      const outward = ease((t - backStart) / (g.backTime + g.driftTime));
+      hand[2] += .030 * outward * (1 - ease(front));
       omega += step * (natural ** 2 * (angle - tipAngle) - 2 * damping * natural * omega);
       tipAngle += omega * step;
       lateralRate += step * (-(natural ** 2) * lateral - 2 * damping * natural * lateralRate);

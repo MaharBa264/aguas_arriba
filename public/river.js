@@ -284,7 +284,8 @@
     };
     const [back,stopBack]=timing.back, [front,stopFront]=timing.front;
     const [lower,settled]=timing.lower || [stopFront,stopFront+1];
-    const transfer=delay=>ramp(back-.16+delay,stopBack+.17+delay)
+    const transfer=delay=>.8*ramp(back-.16+delay,stopBack+.17+delay)
+      +.2*ramp(back+delay,front+delay)
       -1.65*ramp(front-.13+delay,stopFront+.13+delay)
       +.43*ramp(lower+.1+delay,settled+.2+delay);
     const hips=transfer(0), ribs=transfer(.065);
