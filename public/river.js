@@ -274,15 +274,58 @@
     sleeve([[lerpPoint(elbow,wrist,.45),.061],[cuff,.065],[lerpPoint(elbow,wrist,.60),.059]],jacket);
     sleeve([[cuff,.049],[lerpPoint(elbow,wrist,.69),.050],[lerpPoint(elbow,wrist,.90),.035],[wrist,.034]],skin);
   }
+  // The hips start each transfer just before the grip, the ribs follow, and
+  // the head watches the unrolling line. Evaluate in cast time so scrubbing
+  // backwards and slow playback produce exactly the same pose.
+  function castingPose(time, timing) {
+    const ramp=(a,b)=>{
+      const u=Math.max(0,Math.min(1,(time-a)/(b-a)));
+      return u*u*u*(10+u*(6*u-15));
+    };
+    const [back,stopBack]=timing.back, [front,stopFront]=timing.front;
+    const [lower,settled]=timing.lower || [stopFront,stopFront+1];
+    const transfer=delay=>ramp(back-.16+delay,stopBack+.17+delay)
+      -1.65*ramp(front-.13+delay,stopFront+.13+delay)
+      +.43*ramp(lower+.1+delay,settled+.2+delay);
+    const hips=transfer(0), ribs=transfer(.065);
+    const look=ramp(stopBack-.06,front+.01)-ramp(front+.01,stopFront+.15);
+    return [hips,ribs,look];
+  }
+  // Same height-weighted pose as the WebGL body pass. The feet stay planted.
+  function posedPoint(point,pose) {
+    const [x,y,z]=point,[hips,ribs,look]=pose;
+    const weight=(lo,hi)=>{const u=Math.max(0,Math.min(1,(y-lo)/(hi-lo)));return u*u*(3-2*u)};
+    const leg=weight(.14,.88), chest=weight(.86,1.48), head=weight(1.52,1.68);
+    const turn=.13*hips*leg+.31*ribs*chest+.38*look*head;
+    const cs=Math.cos(turn),sn=Math.sin(turn);
+    return [x*cs-z*sn-.067*hips*leg-.09*ribs*Math.max(0,y-.85),
+      y-.018*hips*hips*leg+.065*ribs*z*chest, x*sn+z*cs+.019*hips*leg];
+  }
+  let bodyPose=[0,0,0], softwareBody=[], bodyVertices=[];
+  function prepareSoftwareBody() {
+    const byPoint=new Map();
+    softwareBody=bodyCache.map(part=>({...part,v:part.v.map(point=>{
+      if(!byPoint.has(point))byPoint.set(point,[...point]);
+      return byPoint.get(point);
+    })}));
+    bodyVertices=Array.from(byPoint);
+  }
   function person(grip, angle, bend, lateral) {
     const jacket = el('coat').value, skin = '#cf9069', key = jacket + el('hat').checked;
     if (key !== bodyKey) {
       const moving = scene;
       scene = []; makeBody(jacket, skin); bodyCache = scene; scene = moving;
-      bodyKey = key;
+      bodyKey = key; softwareBody=[];
       if (renderer) renderer.setBody(bodyCache);
     }
-    if (!useGpu) for (const part of bodyCache) scene.push(part);
+    if (!useGpu) {
+      if (!softwareBody.length) prepareSoftwareBody();
+      for(const [rest,vertex] of bodyVertices){
+        const point=posedPoint(rest,bodyPose);
+        for(let k=0;k<3;k++)vertex[k]=point[k];
+      }
+      scene.push(...softwareBody);
+    }
 
     // Rod frame: "axis" runs up the rod, "top" is the side of the cork under the thumb.
     const axis = [Math.cos(angle), Math.sin(angle), 0], top = [-axis[1], axis[0], 0];
@@ -292,7 +335,8 @@
     // and the wrist opens on the back cast and closes on the forward stop. The shoulder
     // rises and reaches a little with the hand.
     const wrist = along(grip, -.078, -.012, .018);
-    limb([.045 + grip[0] * .10, 1.438 + .07 * (grip[1] - 1.35), .201], wrist, [-.3, -1, .35], jacket, skin);
+    const shoulder=posedPoint([.052,1.443,.201],bodyPose);
+    limb(shoulder,wrist,[-.32-.17*bodyPose[1],-.94,.38+.13*bodyPose[0]],jacket,skin);
     sleeve([[wrist,.033],[along(grip,-.045,0,.021),.044],[along(grip,.013,0,.022),.047],[along(grip,.052,0,.012),.034]],skin);
     for(let i=0;i<4;i++){
       const x=-.035+i*.023;
@@ -301,8 +345,8 @@
     sleeve([[along(grip,-.02,.026,.023),.021],[along(grip,.014,.043,.013),.019],[along(grip,.061,.035,.002),.012]],skin);
 
     // Line hand: it holds the line below the first guide and shadows the rod hand.
-    const lineHand = [.27 + .05 * (grip[0] - .3), 1.10 + .12 * (grip[1] - 1.35), -.10];
-    limb([.028, 1.435, -.202], add(lineHand, [-.06, .02, -.01]), [-.36, -1, -.4], jacket, skin);
+    const lineHand=posedPoint([.28+.12*(grip[0]-.3),1.12+.18*(grip[1]-1.35),-.14],bodyPose);
+    limb(posedPoint([.028, 1.435, -.202],bodyPose), add(lineHand, [-.06, .02, -.01]), [-.36, -1, -.4], jacket, skin);
     sleeve([[add(lineHand,[-.06,.02,-.01]),.032],[add(lineHand,[-.021,.009,0]),.041],
       [add(lineHand,[.014,-.002,.003]),.039],[add(lineHand,[.040,.006,0]),.016],
       [add(lineHand,[.043,.014,0]),.004]],skin);
@@ -356,6 +400,7 @@
   function drawCast(time) {
     const last = cast.frames.length - 1, index = time / cast.duration * last, k = Math.min(last, Math.floor(index)), u = index - k;
     const a = cast.frames[k], b = cast.frames[Math.min(k + 1, last)];
+    bodyPose=castingPose(time,cast.timing);
     person(a.hand.map((v, i) => mix(v, b.hand[i], u)), mix(a.angle, b.angle, u), mix(a.curvature, b.curvature, u), mix(a.lateral, b.lateral, u));
     const nodes = [];
     for (let j = 0; j < a.points.length; j += 3) nodes.push([0, 1, 2].map(i => mix(a.points[j + i], b.points[j + i], u)));
@@ -457,9 +502,10 @@
   // ---- Frame loop. A frame is skipped when nothing it depends on has changed. ----
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   let last = 0, travel = 0, previousView, previousFrame;
+  document.addEventListener('visibilitychange',()=>{ last=0; });
   function frame(now) {
     requestAnimationFrame(frame);
-    const dt = Math.min(.06, (now - last) / 1000);
+    const dt = last ? (now-last)/1000 : 0;
     last = now;
     if (state.playing) {
       state.progress = Math.min(1, state.progress + dt * Number(el('rate').value) / cast.duration);
@@ -498,7 +544,7 @@
       const x = ((i * 2.71 + travel * Math.cos(dir)) % 22 + 22) % 22 - 11, z = ((i * 1.97 + travel * Math.sin(dir)) % 10 + 10) % 10 - 5, y = .32 + i * .671 % 4;
       stroke([x, y, z], [x + .014 * speed * Math.cos(dir), y, z + .014 * speed * Math.sin(dir)], '#f1fbdfaa', .018);
     }
-    if (useGpu) renderer.render(scene, camera, right, up, forward, w, h, scale);
+    if (useGpu) renderer.render(scene, camera, right, up, forward, w, h, scale, bodyPose);
     else paintSoftware(viewKey, dist, ratio);
   }
 

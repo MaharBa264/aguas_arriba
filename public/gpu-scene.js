@@ -15,7 +15,18 @@ function createSceneRenderer(background, terrain) {
     uniform vec2 screen;
     uniform float focal;
     varying lowp vec4 tint;
-    vec3 camera(vec3 p){vec3 v=p-eye;return vec3(dot(v,right),dot(v,up),dot(v,forward));}
+    uniform vec3 pose;
+    uniform bool poseBody;
+    vec3 camera(vec3 p){
+      if(poseBody){
+        float leg=smoothstep(.14,.88,p.y), chest=smoothstep(.86,1.48,p.y), head=smoothstep(1.52,1.68,p.y);
+        float turn=.13*pose.x*leg+.31*pose.y*chest+.38*pose.z*head;
+        float c=cos(turn),s=sin(turn);
+        p=vec3(p.x*c-p.z*s-.067*pose.x*leg-.09*pose.y*max(0.,p.y-.85),
+          p.y-.018*pose.x*pose.x*leg+.065*pose.y*p.z*chest,
+          p.x*s+p.z*c+.019*pose.x*leg);
+      }
+      vec3 v=p-eye;return vec3(dot(v,right),dot(v,up),dot(v,forward));}
     void main(){
       vec3 p=camera(position);
       vec2 xy=p.xy*focal*2.0/screen;
@@ -51,7 +62,7 @@ function createSceneRenderer(background, terrain) {
     gl.enable(gl.BLEND);
     gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     locations = {};
-    for (const name of ['eye', 'right', 'up', 'forward', 'screen', 'focal']) locations[name] = gl.getUniformLocation(program, name);
+    for (const name of ['eye', 'right', 'up', 'forward', 'screen', 'focal', 'pose', 'poseBody']) locations[name] = gl.getUniformLocation(program, name);
     attributes = ['position', 'other', 'color', 'width'].map(name => gl.getAttribLocation(program, name));
     const mesh = () => ({buffer: gl.createBuffer(), data: new Float32Array(0), length: 0});
     fixed = mesh(); body = mesh(); moving = mesh();
@@ -118,7 +129,7 @@ function createSceneRenderer(background, terrain) {
       bodyObjects = objects;
       if (this.ready) upload(body, objects, gl.STATIC_DRAW);
     },
-    render(objects, eye, right, up, forward, w, h, focal) {
+    render(objects, eye, right, up, forward, w, h, focal, pose) {
       canvas.style.display = 'block';
       if (canvas.width !== background.width || canvas.height !== background.height) { canvas.width = background.width; canvas.height = background.height; }
       gl.viewport(0, 0, canvas.width, canvas.height);
@@ -127,7 +138,10 @@ function createSceneRenderer(background, terrain) {
       gl.uniform2f(locations.screen, w, h);
       gl.uniform1f(locations.focal, focal);
       draw(fixed);
+      gl.uniform3fv(locations.pose,pose);
+      gl.uniform1i(locations.poseBody,1);
       draw(body);
+      gl.uniform1i(locations.poseBody,0);
       upload(moving, objects, gl.STREAM_DRAW);
       draw(moving);
     }
