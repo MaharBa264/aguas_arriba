@@ -19,3 +19,10 @@ npm test
 ## Publicación
 
 Cloudflare Pages, conectado a este repositorio: sin comando de compilación y con `public` como directorio de salida.
+
+## Laboratorio fluvial ASCII
+
+- [Diseño, fundamentos y hoja de ruta](docs/river-design.md)
+- [Laboratorio en línea](https://aguas-arriba.pages.dev/ascii-river.html)
+- `public/river-hydraulics.js`: campo procedural experimental.
+- Pruebas hidráulicas: `node --test test/river-hydraulics.test.js`.
