@@ -2,10 +2,13 @@
 (function(root){
 'use strict';
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
-function velocityAt(x,y,z,t,rocks=[],speed=.7){
- const h=clamp((y+2)/4.4,0,1), bank=clamp((3-Math.abs(z))/.65,0,1);
+function velocityAt(x,y,z,t,rocks=[],speed=.7,geometry=null){
+ const floor=geometry?geometry.bed(x,z):-2, surface=geometry?geometry.surface:2.4, center=geometry?geometry.center(x):0, width=geometry?geometry.width(x):3;
+ if(y<floor||y>surface||Math.abs(z-center)>width)return {x:0,y:0,z:0};
+ const h=clamp((y-floor)/(surface-floor),0,1), bank=clamp((width-Math.abs(z-center))/.65,0,1);
+ if(geometry)speed*=clamp(7/(width*(surface-floor)),.45,2.2);
  const profile=Math.pow(h,.32)*(1-.12*Math.pow(h,8));
- let u=speed*profile*bank,v=0,w=0;
+ let u=speed*profile*bank,v=0,w=geometry?u*(geometry.center(x+.05)-geometry.center(x-.05))/.1:0;
  for(const r of rocks){
   const X=x-r.x,Y=y-r.y,Z=z-r.z,R=r.r;
   const d=Math.hypot(X,Y/.8,Z);
