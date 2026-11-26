@@ -37,3 +37,9 @@ Simulador didáctico de pesca con mosca, dinámica fluvial y ecología, ejecutab
 - Inspiración gráfica ASCII Lab: https://github.com/sapozhkov/ascii-lab-public
 
 Estas referencias provienen de la investigación de diseño previa; no se han reabierto en esta sesión. Los coeficientes procedurales son hipótesis de implementación, no valores calibrados.
+
+## Implementación 0.4
+- `public/river-geometry.js`: perfiles serrano, rapidos, pozon, curva y estrecho; centro, semiancho y batimetría procedural. Semilla inicial 42; regenerar incrementa semilla. Geometría y piedras reproducibles, no toda la simulación.
+- Hidráulica: perfil vertical local, fricción lateral, factor de velocidad aproximado inverso a sección local y dirección tangente al eje. No es un solucionador de continuidad ni reproduce circulación helicoidal todavía.
+- Vista ASCII: zoom, lecho, superficie y margen posterior; mosca libre por defecto, línea ilustrativa en modo manual. No hay aún física de línea.
+- Pendientes: ejecutar pruebas, verificar despliegue y legibilidad móvil, mejorar colisiones con sólidos y validar perfiles. Ecología energética queda para 0.5.
